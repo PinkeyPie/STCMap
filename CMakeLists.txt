@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.26)
-project(STCMapEngine)
+project(DXD3Learning)
 
 set(CMAKE_CXX_STANDARD 20)
-set(PROJECT_NAME STCMapEngine)
+set(PROJECT_NAME DXD3Learning)
 if(NOT MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -Wno-narrowing -Wno-sign-compare -Wno-unused-variable")
 endif ()
@@ -41,7 +41,7 @@ foreach (dir_name ${src_dirs})
     endforeach ()
 endforeach ()
 
-if(WIN32)
+if(MSVC)
     add_link_options(
             /SUBSYSTEM:WINDOWS
             /DYNAMICBASE
@@ -49,23 +49,23 @@ if(WIN32)
             Comctl32.lib
             /MACHINE:X64
     )
+    set(shared_sources)
+    set(shared_headers)
+    scan_recurse(shared_sources ${PROJECT_SOURCE_DIR}/common .cpp)
+    scan_recurse(shared_headers ${PROJECT_SOURCE_DIR}/common .h)
+    add_library(common SHARED ${shared_sources} ${shared_headers})
+    target_link_libraries(common PUBLIC dxgi d3d12 dxguid d3dcompiler)
+    target_compile_definitions(common PRIVATE SHARED_LIBRARY)
+
     add_executable(${PROJECT_NAME} ${src_files})
-    if(MSVC)
-        target_compile_options(${PROJECT_NAME} INTERFACE /arch:SSE4.1)
-    else ()
-        target_compile_options(${PROJECT_NAME} INTERFACE -msse4.1)
-    endif ()
+    target_compile_options(${PROJECT_NAME} INTERFACE /arch:SSE4.1)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE common d2d1)
+    target_include_directories(${PROJECT_NAME} PRIVATE common)
 else ()
     add_executable(${PROJECT_NAME} ${src_files})
+    target_compile_options(${PROJECT_NAME} INTERFACE -msse4.1)
 endif ()
-
-set(shared_sources)
-set(shared_headers)
-scan(shared_sources ${PROJECT_SOURCE_DIR}/shared .cpp)
-scan(shared_headers ${PROJECT_SOURCE_DIR}/shared .h)
-add_library(shared STATIC ${shared_sources} ${shared_headers})
-target_link_libraries(shared PUBLIC dxgi.lib d3d12.lib dxguid.lib d3dcompiler.lib)
 
 if(EXISTS ${PROJECT_SOURCE_DIR}/resources)
     file(GLOB dir RELATIVE ${PROJECT_SOURCE_DIR}/resources ${PROJECT_SOURCE_DIR}/resources/*)
@@ -73,7 +73,6 @@ if(EXISTS ${PROJECT_SOURCE_DIR}/resources)
         file(COPY_FILE ${PROJECT_SOURCE_DIR}/resources/${file} ${CMAKE_CURRENT_BINARY_DIR}/${file})
     endforeach ()
 endif ()
-target_include_directories(${PROJECT_NAME} PUBLIC shared PRIVATE shobjidl.lib d2d1.lib)
 
 foreach (subdir ${local_libs_dir})
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/${subdir})

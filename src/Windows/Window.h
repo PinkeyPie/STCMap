@@ -3,12 +3,8 @@
 #include <d2d1.h>
 #include <windows.h>
 #include "string"
-#include "BaseWindow.h"
-#include <d3d12.h>
-#include <DirectXMath.h>
-#include <DirectXPackedVector.h>
-#include <dxgi.h>
-#include <dxcore.h>
+#include "window/BaseWindow.h"
+#include <wrl/client.h>
 
 class Window  : public BaseWindow {
 public:
@@ -19,10 +15,10 @@ public:
 protected:
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
 private:
-    CComPtr<ID2D1Factory> pFactory;
-    CComPtr<ID2D1HwndRenderTarget> pRenderTarget;
-    CComPtr<ID2D1SolidColorBrush> pBrush;
-    CComPtr<ID2D1SolidColorBrush> pStrokeBrush;
+    Microsoft::WRL::ComPtr<ID2D1Factory> pFactory;
+    Microsoft::WRL::ComPtr<ID2D1HwndRenderTarget> pRenderTarget;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pBrush;
+    Microsoft::WRL::ComPtr<ID2D1SolidColorBrush> pStrokeBrush;
     D2D1_ELLIPSE ellipse;
 
     void DiscardGraphicsResources();

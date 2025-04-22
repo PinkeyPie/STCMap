@@ -3,8 +3,19 @@
 //
 
 #include "Window.h"
+#include <dxgi1_4.h>
 #include <shobjidl_core.h>
+#include <wrl/client.h>
 #include "iostream"
+#include <comdef.h>
+
+using Microsoft::WRL::ComPtr;
+
+inline void throw_if_fail(HRESULT hr) {
+    if(FAILED(hr)) {
+        throw _com_error(hr);
+    }
+}
 
 PCTCH Window::ClassName() const {
     return TEXT("MainWindow");
@@ -45,8 +56,8 @@ HRESULT Window::CreateGraphicsResources() {
 }
 
 void Window::DiscardGraphicsResources() {
-    pRenderTarget.Release();
-    pBrush.Release();
+    pRenderTarget.Reset();
+    pBrush.Reset();
 }
 
 void Window::OnPaint() {
@@ -55,25 +66,9 @@ void Window::OnPaint() {
         PAINTSTRUCT ps;
         BeginPaint(hwnd, &ps);
         pRenderTarget->BeginDraw();
-
-        CComPtr<IDXGIFactory> pFactory;
-        DXGI_SWAP_CHAIN_DESC swapChainDesc;
-
-        D3D_FEATURE_LEVEL featureLevels[3] = {
-            D3D_FEATURE_LEVEL_11_0,
-            D3D_FEATURE_LEVEL_10_0,
-            D3D_FEATURE_LEVEL_9_3
-        };
-
-        D3D12_FEATURE_DATA_FEATURE_LEVELS featureLevelsInfo;
-        featureLevelsInfo.NumFeatureLevels = 3;
-        featureLevelsInfo.pFeatureLevelsRequested = featureLevels;
-
-
-
         pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::SkyBlue));
-        pRenderTarget->FillEllipse(ellipse, pBrush);
-        pRenderTarget->DrawEllipse(ellipse, pStrokeBrush);
+        pRenderTarget->FillEllipse(ellipse, pBrush.Get());
+        pRenderTarget->DrawEllipse(ellipse, pStrokeBrush.Get());
         SYSTEMTIME time;
         GetLocalTime(&time);
         pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
@@ -103,19 +98,19 @@ void Window::Resize() {
 void Window::DrawClockHand(float fHandLength, float fAngle, float fStrokeWidth) {
     pRenderTarget->SetTransform(D2D1::Matrix3x2F::Rotation(fAngle, ellipse.point));
     D2D_POINT_2F endPoint = D2D1::Point2F(ellipse.point.x, ellipse.point.y - (ellipse.radiusY * fHandLength));
-    pRenderTarget->DrawLine(ellipse.point, endPoint, pBrush, fStrokeWidth);
+    pRenderTarget->DrawLine(ellipse.point, endPoint, pBrush.Get(), fStrokeWidth);
 }
 
 LRESULT Window::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_CREATE:
-            if(FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &pFactory))) {
+            if(FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, pFactory.GetAddressOf()))) {
                 return -1;
             }
             return 0;
         case WM_DESTROY:
             DiscardGraphicsResources();
-            pFactory.Release();
+            pFactory.Reset();
             PostQuitMessage(0);
             return 0;
         case WM_PAINT:
@@ -125,17 +120,18 @@ LRESULT Window::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
             Resize();
             return 0;
         default:
-            return DefWindowProc(hwnd, uMsg, wParam, lParam);
+            break;
     }
+    return BaseWindow::HandleMessage(uMsg, wParam, lParam);
 }
 
 std::wstring Window::OpenFileDialog() {
     std::wstring wszFileName;
     try {
-        CComPtr<IFileOpenDialog> pFileOpen;
-        throw_if_fail(pFileOpen.CoCreateInstance(__uuidof(FileOpenDialog)));
+        ComPtr<IFileOpenDialog> pFileOpen;
+        throw_if_fail(CoCreateInstance(__uuidof(FileOpenDialog), nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(pFileOpen.GetAddressOf())));
         throw_if_fail(pFileOpen->Show(nullptr));
-        CComPtr<IShellItem> pItem;
+        ComPtr<IShellItem> pItem;
         throw_if_fail(pFileOpen->GetResult(&pItem));
         PWSTR pszFilePath;
         throw_if_fail(pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath));
@@ -147,4 +143,5 @@ std::wstring Window::OpenFileDialog() {
     }
     return wszFileName;
 }
+
 
