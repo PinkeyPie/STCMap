@@ -8,7 +8,9 @@
 
 using Microsoft::WRL::ComPtr;
 
-DxException::DxException(HRESULT hr, const std::wstring &funcName, const std::wstring &filename, int lineNumber) :
+const int NumFrameResources = 3;
+
+DxException::DxException(HRESULT hr, const tstring& funcName, const tstring& filename, int lineNumber) :
     ErrorCode(hr),
     FunctionName(funcName),
     FileName(filename),
@@ -73,7 +75,7 @@ ComPtr<ID3D12Resource> d3dUtil::CreateDefaultBuffer(
 
     // Schedule the data we want to copy into the default buffer resource. At a high level, the helper function UpdateSubresources
     // will copy the CPU memory into the intermediate upload heap. Then, using ID3D12CommandList::CopySubresourceRegion,
-    // the intermediate upload heap data will be copied to mBuffer.
+    // the intermediate upload heap data will be copied to default buffer.
     CD3DX12_RESOURCE_BARRIER barrier(CD3DX12_RESOURCE_BARRIER::Transition(defaultBuffer.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST));
     pCmdList->ResourceBarrier(1, &barrier);
     UpdateSubresources<1>(pCmdList, defaultBuffer.Get(), uploadBuffer.Get(), 0, 0, 1, &subResourceData);
@@ -88,7 +90,7 @@ ComPtr<ID3D12Resource> d3dUtil::CreateDefaultBuffer(
 }
 
 ComPtr<ID3DBlob> d3dUtil::CompileShader(
-    const std::wstring &filename,
+    const tstring& filename,
     const D3D_SHADER_MACRO *defines,
     const std::string &entrypoint,
     const std::string &target) {
@@ -100,7 +102,12 @@ ComPtr<ID3DBlob> d3dUtil::CompileShader(
 
     ComPtr<ID3DBlob> byteCode = nullptr;
     ComPtr<ID3DBlob> errors = nullptr;
-    hr = D3DCompileFromFile(filename.c_str(), defines, D3D_COMPILE_STANDARD_FILE_INCLUDE,
+#ifdef _UNICODE
+    std::wstring wideName = filename;
+#else
+    std::wstring wideName = AnsiToWString(filename);
+#endif
+    hr = D3DCompileFromFile(wideName.c_str(), defines, D3D_COMPILE_STANDARD_FILE_INCLUDE,
         entrypoint.c_str(), target.c_str(), compileFlags, 0, &byteCode, &errors);
 
     if(errors != nullptr) {
@@ -118,18 +125,12 @@ ComPtr<ID3DBlob> d3dUtil::CompileShader(
     return byteCode;
 }
 
-std::wstring DxException::ToString() const {
+tstring DxException::ToString() const {
     // Get the string description of the error code.
-    _com_error err(ErrorCode);
-#ifdef _UNICODE
-    std::wstring msg(err.ErrorMessage());
-#else
-    int nLength = MultiByteToWideChar(CP_UTF8, 0, err.ErrorMessage(), -1, nullptr, 0);
-    auto szMsg = new WCHAR[nLength];
-    MultiByteToWideChar(CP_UTF8, 0, err.ErrorMessage(), -1, szMsg, nLength);
-    std::wstring msg {szMsg};
-#endif
-    return FunctionName + L" failed in " + FileName + L"; line " + std::to_wstring(LineNumber) + L"; error: " + msg;
+    const _com_error err(ErrorCode);
+    std::string fileInfo = __FILE__;
+    const tstring msg(err.ErrorMessage());
+    return FunctionName + TEXT(" failed in ") + FileName + TEXT("; line ") + std::to_tstring(LineNumber) + TEXT("; error ") + msg.c_str();
 }
 
 

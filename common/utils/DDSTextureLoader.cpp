@@ -26,11 +26,6 @@
 #include "DDSTextureLoader.h"
 
 using namespace Microsoft::WRL;
-
-#if !defined(NO_D3D11_DEBUG_NAME) && ( defined(_DEBUG) || defined(PROFILE) )
-#pragma comment(lib,"dxguid.lib")
-#endif
-
 using namespace DirectX;
 
 //--------------------------------------------------------------------------------------

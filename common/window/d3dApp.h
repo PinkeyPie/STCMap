@@ -9,13 +9,9 @@
 #include "../utils/d3dUtil.h"
 #include "../GameTimer.h"
 
-#pragma comment(lib, "d3dcompiler.lib")
-#pragma comment(lib, "D3D12.lib")
-#pragma comment(lib, "dxgi.lib")
-
-class SHARED_EXPORT D3DApp : public BaseWindow {
+class COMMON_EXPORT D3DApp : public BaseWindow {
 protected:
-    explicit D3DApp(HINSTANCE hInstance = nullptr);
+    explicit D3DApp();
     ~D3DApp() override;
 public:
     explicit D3DApp(const D3DApp& o) = delete;
@@ -29,9 +25,8 @@ public:
     [[nodiscard]] bool Get4xMsaaState() const;
     void Set4xMsaaState(bool value);
 
-    int Run();
-
-    virtual bool Initialize();
+    bool Initialize() override;
+    int Run() override;
 
     [[nodiscard]] PCTCH ClassName() const override;
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override;

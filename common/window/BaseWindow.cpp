@@ -66,10 +66,6 @@ BOOL BaseWindow::Create(PCTCH lpWindowName, DWORD dwStyle, DWORD dwExStyle, int 
     return TRUE;
 }
 
-BOOL BaseWindow::Create() {
-    return Create(TEXT("window"), WS_OVERLAPPEDWINDOW);
-}
-
 LRESULT BaseWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         // WM_DESTROY is sent when the window is being destroyed.
@@ -104,5 +100,22 @@ LRESULT BaseWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
     }
 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+bool BaseWindow::Initialize() {
+    return Create(TEXT("window"), WS_OVERLAPPEDWINDOW);
+}
+
+int BaseWindow::Run() {
+    MSG msg = {};
+
+    while (msg.message != WM_QUIT) {
+        if(PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
+
+    return static_cast<int>(msg.wParam);
 }
 

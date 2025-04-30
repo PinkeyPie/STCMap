@@ -1,22 +1,24 @@
 #include <iostream>
 #include <windows.h>
-#include "window/BaseWindow.h"
+
+#include "Windows/BoxApp.h"
+#include "Windows/InitAppWindow.h"
 #include "Windows/Window.h"
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLine, int nCmdShow) {
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-    if(FAILED(hr)) {
-        std::cout << "Exception appeared error string: " << std::endl;
-        return -1;
+#if defined(DEBUG) | defined(_DEBUG)
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+#endif
+    try {
+        BoxApp window;
+        if(!window.Initialize()) {
+            std::cout << "Exception during window creation" << std::endl;
+            return -1;
+        }
+        window.Run();
     }
-    Window window;
-    if(!window.Create()) {
-        return 0;
-    }
-    MSG msg = {};
-    while (GetMessage(&msg, nullptr, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+    catch (DxException& e) {
+        MessageBox(nullptr, e.ToString().c_str(), TEXT("HR Failed"), MB_OK);
     }
     return 0;
 }

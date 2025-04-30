@@ -11,11 +11,7 @@ D3DApp *D3DApp::GetApp() {
     return instance;
 }
 
-D3DApp::D3DApp(HINSTANCE hInstance) : BaseWindow() {
-    if(hInstance == nullptr) {
-        hInstance = GetModuleHandle(nullptr);
-    }
-    hAppInstance = hInstance;
+D3DApp::D3DApp() : BaseWindow() {
     instance = this;
 }
 
@@ -83,13 +79,10 @@ int D3DApp::Run() {
 }
 
 bool D3DApp::Initialize() {
-    if(not Create()) {
+    if(not BaseWindow::Initialize()) {
         return false;
     }
-    if(not InitDirect3D()) {
-        return false;
-    }
-
+    InitDirect3D();
     // Do initial resize code
     OnResize();
 
@@ -113,9 +106,9 @@ void D3DApp::CreateRtvAndDsvDescriptorHeaps() {
 }
 
 void D3DApp::OnResize() {
-    assert(_pDevice == nullptr);
-    assert(_pSwapChain == nullptr);
-    assert(_pDirectCommandListAlloc == nullptr);
+    assert(_pDevice != nullptr);
+    assert(_pSwapChain != nullptr);
+    assert(_pDirectCommandListAlloc != nullptr);
 
     // Flush before changing any resources
     FlushCommandQueue();

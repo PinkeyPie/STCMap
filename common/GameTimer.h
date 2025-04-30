@@ -4,8 +4,8 @@ class GameTimer {
 public:
     GameTimer();
 
-    float TotalTime() const; // in seconds
-    float DeltaTime() const; // in seconds
+    [[nodiscard]] float TotalTime() const; // in seconds
+    [[nodiscard]] float DeltaTime() const; // in seconds
 
     void Reset();   // Call before message loop
     void Start();   // Call when updated

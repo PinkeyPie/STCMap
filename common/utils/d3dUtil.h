@@ -22,66 +22,83 @@
 #include "d3dx12.h"
 #include "DDSTextureLoader.h"
 #include "MathHelper.h"
+#include "../CommonGlobal.h"
 
-extern const int NumFrameResources;
-
-inline void D3DSetDebugName(IDXGIObject* obj, const char* name) {
-    if(obj) {
-        obj->SetPrivateData(WKPDID_D3DDebugObjectName, lstrlenA(name), name);
-    }
+#ifdef _UNICODE
+#ifndef ThrowIfFailed
+#define ThrowIfFailed(hr)                                                \
+{                                                                        \
+HRESULT hr__ = (hr);                                                 \
+tstring wfn = AnsiToWString(__FILE__);                               \
+if(FAILED(hr__)) { throw DxException(hr__, L#hr, wfn, __LINE__); }   \
 }
-
-inline void D3DSetDebugName(ID3D12Device* obj, const char* name) {
-    if(obj) {
-        obj->SetPrivateData(WKPDID_D3DDebugObjectName, lstrlenA(name), name);
-    }
-}
-
-inline void D3DSetDebugName(ID3D12DeviceChild* obj, const char* name) {
-    if(obj) {
-        obj->SetPrivateData(WKPDID_D3DDebugObjectName, lstrlenA(name), name);
-    }
-}
-
-inline std::wstring AnsiToWString(const std::string& str) {
-    WCHAR buffer[512];
-    MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, buffer, 512);
-    return std::wstring(buffer);
-}
-
-/*
-#if defined(_DEBUG)
-    #ifndef Assert
-    #define Assert(x, description)                                  \
-    {                                                               \
-        static bool ignoreAssert = false;                           \
-        if(!ignoreAssert && !(x))                                   \
-        {                                                           \
-            Debug::AssertResult result = Debug::ShowAssertDialog(   \
-            (L#x), description, AnsiToWString(__FILE__), __LINE__); \
-        if(result == Debug::AssertIgnore)                           \
-        {                                                           \
-            ignoreAssert = true;                                    \
-        }                                                           \
-                    else if(result == Debug::AssertBreak)           \
-        {                                                           \
-            __debugbreak();                                         \
-        }                                                           \
-        }                                                           \
-    }
-    #endif
-#else
-    #ifndef Assert
-    #define Assert(x, description)
-    #endif
 #endif
-*/
+#ifndef tcscpy
+#define tcscpy(src, dst) wcscpy(dst, src)
+#endif
+#ifndef tcscat
+#define tcscat(src, dst) wcscat(dst, src)
+#endif
+#ifndef tstring
+#define tstring std::wstring
+#endif
+#ifndef to_tstring
+#define to_tstring to_wstring
+#endif
+#else
+#define ThrowIfFailed(hr)                                                \
+{                                                                        \
+HRESULT hr__ = (hr);                                                 \
+tstring wfn = __FILE__;                                              \
+if(FAILED(hr__)) { throw DxException(hr__, #hr, wfn, __LINE__); }    \
+}
+#ifndef tcscpy
+#define tcscpy(src, dst) strcpy(dst, src)
+#endif
+#ifndef tcscat
+#define tcscat(dst, src) strcat(dst, src)
+#endif
+#ifndef tstring
+#define tstring std::string
+#endif
+#ifndef to_tstring
+#define to_tstring to_string
+#endif
+#endif
 
-class d3dUtil {
+#ifndef ReleaseCom
+#define ReleaseCom(x) { if(x) { x->Release(); x = nullptr; } }
+#endif
+
+COMMON_EXPORT extern const int NumFrameResources;
+
+COMMON_EXPORT inline void D3DSetDebugName(IDXGIObject* obj, const char* name) {
+    if(obj) {
+        obj->SetPrivateData(WKPDID_D3DDebugObjectName, lstrlenA(name), name);
+    }
+}
+
+COMMON_EXPORT inline void D3DSetDebugName(ID3D12Device* obj, const char* name) {
+    if(obj) {
+        obj->SetPrivateData(WKPDID_D3DDebugObjectName, lstrlenA(name), name);
+    }
+}
+
+COMMON_EXPORT inline void D3DSetDebugName(ID3D12DeviceChild* obj, const char* name) {
+    if(obj) {
+        obj->SetPrivateData(WKPDID_D3DDebugObjectName, lstrlenA(name), name);
+    }
+}
+
+COMMON_EXPORT inline std::wstring AnsiToWString(const std::string& str) {
+    WCHAR buffer[MAX_PATH];
+    MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, buffer, 512);
+    return { buffer };
+}
+
+class COMMON_EXPORT d3dUtil {
 public:
     static bool IsKeyDown(int vkeyCode);
-
-    static std::string ToString(HRESULT hr);
 
     static UINT CalcConstantBufferByteSize(UINT byteSize) {
         // Constant buffers must be a multiple of the minimum hardware
@@ -108,22 +125,21 @@ public:
         Microsoft::WRL::ComPtr<ID3D12Resource>& uploadBuffer);
 
     static Microsoft::WRL::ComPtr<ID3DBlob> CompileShader(
-        const std::wstring& filename,
+        const tstring& filename,
         const D3D_SHADER_MACRO* defines,
         const std::string& entrypoint,
         const std::string& target);
 };
 
-class DxException : public std::exception {
+class COMMON_EXPORT DxException : public std::exception {
 public:
     DxException() = default;
-    DxException(HRESULT hr, const std::wstring& funcName, const std::wstring& filename, int lineNumber);
+    DxException(HRESULT hr, const tstring& funcName, const tstring& filename, int lineNumber);
 
-    std::wstring ToString() const;
-
+    [[nodiscard]] tstring ToString() const;
     HRESULT ErrorCode = S_OK;
-    std::wstring FunctionName;
-    std::wstring FileName;
+    tstring FunctionName;
+    tstring FileName;
     int LineNumber = -1;
 };
 
@@ -139,7 +155,7 @@ struct SubmeshGeometry {
     DirectX::BoundingBox Bounds;
 };
 
-struct MeshGeometry {
+struct COMMON_EXPORT MeshGeometry {
     // Give it a name so we can look it up by name
     std::string Name;
 
@@ -165,7 +181,7 @@ struct MeshGeometry {
     // the Submesh individually
     std::unordered_map<std::string, SubmeshGeometry> DrawArgs;
 
-    [[nodiscard]] D3D12_VERTEX_BUFFER_VIEW ViewBufferView() const {
+    [[nodiscard]] D3D12_VERTEX_BUFFER_VIEW VertexBufferView() const {
         D3D12_VERTEX_BUFFER_VIEW vbv;
         vbv.BufferLocation = VertexBufferGPU->GetGPUVirtualAddress();
         vbv.StrideInBytes = VertexByteStride;
@@ -190,7 +206,7 @@ struct MeshGeometry {
     }
 };
 
-struct Light {
+struct COMMON_EXPORT Light {
     DirectX::XMFLOAT3 Strength = {0.5f, 0.5f, 0.5f};
     float FalloffStart = 1.f;                               // point/spot light only
     DirectX::XMFLOAT3 Direction = { 0.f, -1.f, 0.f }; // directional/spot light only
@@ -201,7 +217,7 @@ struct Light {
 
 #define MaxLights 16
 
-struct MaterialConstants {
+struct COMMON_EXPORT MaterialConstants {
     DirectX::XMFLOAT4 DiffuseAlbedo = { 1.f, 1.f, 1.f, 1.f };
     DirectX::XMFLOAT3 FresnelR0 = {0.01f, 0.01f, 0.01f };
     float Roughness = 0.25f;
@@ -212,7 +228,7 @@ struct MaterialConstants {
 
 // Simple struct to represent a material for our demos. A production 3D engine
 // would likely create a class hierarchy of Materials
-struct Material {
+struct COMMON_EXPORT Material {
     // Unique material name for lookup
     std::string Name;
 
@@ -238,7 +254,7 @@ struct Material {
     DirectX::XMFLOAT4X4 MatTransform = MathHelper::Identity4x4();
 };
 
-struct Texture {
+struct COMMON_EXPORT Texture {
     // Unique material name for lookup
     std::string Name;
 
@@ -247,16 +263,3 @@ struct Texture {
     Microsoft::WRL::ComPtr<ID3D12Resource> Resource = nullptr;
     Microsoft::WRL::ComPtr<ID3D12Resource> UploadHeap = nullptr;
 };
-
-#ifndef ThrowIfFailed
-#define ThrowIfFailed(hr)                                                \
-{                                                                        \
-    HRESULT hr__ = (hr);                                                 \
-    std::wstring wfn = AnsiToWString(__FILE__);                          \
-    if(FAILED(hr__)) { throw DxException(hr__, L#hr, wfn, __LINE__); }   \
-}
-#endif
-
-#ifndef ReleaseCom
-#define ReleaseCom(x) { if(x) { x->Release(); x = nullptr; } }
-#endif

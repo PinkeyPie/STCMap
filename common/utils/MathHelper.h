@@ -3,9 +3,9 @@
 #include <windows.h>
 #include <DirectXMath.h>
 #include <cstdint>
+#include "../CommonGlobal.h"
 
-
-class MathHelper {
+class COMMON_EXPORT MathHelper {
 public:
     static float RandF() {
         return (float)(rand()) / (float)RAND_MAX;

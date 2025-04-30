@@ -1,14 +1,18 @@
 #pragma once
 
 #include <dxgi.h>
-#include "../SharedGlobal.h"
+#include "../CommonGlobal.h"
 
-class SHARED_EXPORT BaseWindow {
+class COMMON_EXPORT BaseWindow {
 public:
     explicit BaseWindow() = default;
     virtual ~BaseWindow() = default;
 
     static LRESULT CALLBACK WindowsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    [[nodiscard]] HWND GetWindow() const { return hwnd; }
+    virtual bool Initialize();
+    virtual int Run();
+protected:
     BOOL Create(PCTCH lpWindowName,
         DWORD dwStyle,
         DWORD dwExStyle = 0,
@@ -18,9 +22,6 @@ public:
         int nHeight = CW_USEDEFAULT,
         HWND hWndParent = nullptr,
         HMENU hMenu = nullptr);
-    virtual BOOL Create();
-    [[nodiscard]] HWND GetWindow() const { return hwnd; }
-protected:
     [[nodiscard]] virtual PCTCH ClassName() const = 0;
     virtual void MouseDawnHandle(WPARAM btnState, int x, int y) {}
     virtual void MouseUpHandle(WPARAM btnState, int x, int y) {}
@@ -46,11 +47,3 @@ protected:
         return static_cast<float>(y) / g_DPIScale;
     }
 };
-
-#ifndef ThrowIfFail
-#define ThrowIfFail(hr)                                              \
-{                                                                    \
-HRESULT hr__ = (hr);                                                 \
-if(FAILED(hr__)) { throw _com_error(hr__); }                         \
-}
-#endif

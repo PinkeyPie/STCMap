@@ -101,13 +101,21 @@ void Window::DrawClockHand(float fHandLength, float fAngle, float fStrokeWidth) 
     pRenderTarget->DrawLine(ellipse.point, endPoint, pBrush.Get(), fStrokeWidth);
 }
 
+bool Window::Initialize() {
+    HRESULT hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, pFactory.GetAddressOf());
+    if(FAILED(hr)) {
+        return false;
+    }
+    if(not BaseWindow::Initialize()) {
+        return false;
+    }
+
+    return true;
+}
+
+
 LRESULT Window::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
-        case WM_CREATE:
-            if(FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, pFactory.GetAddressOf()))) {
-                return -1;
-            }
-            return 0;
         case WM_DESTROY:
             DiscardGraphicsResources();
             pFactory.Reset();

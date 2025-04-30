@@ -6,12 +6,13 @@
 #include "window/BaseWindow.h"
 #include <wrl/client.h>
 
-class Window  : public BaseWindow {
+class Window : public BaseWindow {
 public:
     Window() : BaseWindow(), pFactory(nullptr), pRenderTarget(nullptr), pBrush(nullptr) {}
     ~Window() override = default;
     [[nodiscard]] PCTCH ClassName() const override;
     std::wstring OpenFileDialog();
+    bool Initialize() override;
 protected:
     LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
 private:
