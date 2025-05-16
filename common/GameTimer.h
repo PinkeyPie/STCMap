@@ -1,6 +1,7 @@
 #pragma once
+#include "CommonGlobal.h"
 
-class GameTimer {
+class COMMON_EXPORT GameTimer {
 public:
     GameTimer();
 

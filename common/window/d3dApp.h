@@ -33,7 +33,7 @@ public:
 
 protected:
     virtual void CreateRtvAndDsvDescriptorHeaps();
-    virtual void OnResize();
+    virtual void ResizeHandle();
     virtual void Update(const GameTimer& gt) = 0;
     virtual void Draw(const GameTimer& gt) = 0;
 

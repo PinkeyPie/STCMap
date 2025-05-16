@@ -13,8 +13,8 @@ bool InitAppWindow::Initialize() {
     return true;
 }
 
-void InitAppWindow::OnResize() {
-    D3DApp::OnResize();
+void InitAppWindow::ResizeHandle() {
+    D3DApp::ResizeHandle();
 }
 
 void InitAppWindow::Update(const GameTimer &gt) {}

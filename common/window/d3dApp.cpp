@@ -47,7 +47,7 @@ void D3DApp::Set4xMsaaState(bool value) {
 
         // Recreate the swap chain and buffers with new multisample settings
         CreateSwapChain();
-        OnResize();
+        ResizeHandle();
     }
 }
 
@@ -84,7 +84,7 @@ bool D3DApp::Initialize() {
     }
     InitDirect3D();
     // Do initial resize code
-    OnResize();
+    ResizeHandle();
 
     return true;
 }
@@ -105,7 +105,7 @@ void D3DApp::CreateRtvAndDsvDescriptorHeaps() {
     ThrowIfFailed(_pDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(_pDsvDescHeap.GetAddressOf())));
 }
 
-void D3DApp::OnResize() {
+void D3DApp::ResizeHandle() {
     assert(_pDevice != nullptr);
     assert(_pSwapChain != nullptr);
     assert(_pDirectCommandListAlloc != nullptr);
@@ -231,20 +231,20 @@ LRESULT D3DApp::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
                     _bAppPaused = false;
                     _bMinimised = false;
                     _bMaximized = true;
-                    OnResize();
+                    ResizeHandle();
                 }
                 else if(wParam == SIZE_RESTORED) {
                     // Restoring from minimized state?
                     if(_bMinimised) {
                         _bAppPaused = false;
                         _bMinimised = false;
-                        OnResize();
+                        ResizeHandle();
                     }
                     // Restoring from maximized state?
                     else if(_bMaximized) {
                         _bAppPaused = false;
                         _bMaximized = false;
-                        OnResize();
+                        ResizeHandle();
                     }
                     else if(_bResizing) {
                         // If user is dragging the resize bars, we do not resize
@@ -257,7 +257,7 @@ LRESULT D3DApp::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
                         // sends a WM_EXITSIZEMOVE message.
                     }
                     else {
-                        OnResize();
+                        ResizeHandle();
                     }
                 }
             }
@@ -274,7 +274,7 @@ LRESULT D3DApp::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
             _bAppPaused = false;
             _bResizing = false;
             _timer.Start();
-            OnResize();
+            ResizeHandle();
             return 0;
         case WM_KEYUP:
             if(wParam == VK_ESCAPE) {
@@ -313,7 +313,7 @@ bool D3DApp::InitDirect3D() {
         ThrowIfFailed(_pDxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(pWarpAdapter.GetAddressOf())));
         ThrowIfFailed(D3D12CreateDevice(
             pWarpAdapter.Get(),
-            D3D_FEATURE_LEVEL_12_2,
+            D3D_FEATURE_LEVEL_11_0,
             IID_PPV_ARGS(_pDevice.GetAddressOf())));
     }
 

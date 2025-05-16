@@ -23,7 +23,7 @@ public:
 
     bool Initialize() override;
 private:
-    void OnResize() override;
+    void ResizeHandle() override;
     void Update(const GameTimer &gt) override;
     void Draw(const GameTimer &gt) override;
 };
