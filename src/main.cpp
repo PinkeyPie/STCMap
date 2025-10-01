@@ -1,24 +1,25 @@
 #include <iostream>
-#include <windows.h>
 
-#include "Windows/BoxWindow.h"
-#include "Windows/InitAppWindow.h"
-#include "Windows/Window.h"
+#include "Application.h"
+#include "pch.h"
+#include "directx/dx.h"
+#include "directx/DxContext.h"
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLine, int nCmdShow) {
-#if defined(DEBUG) | defined(_DEBUG)
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+#ifdef _DEBUG
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
-    try {
-        auto window = new BoxApp;
-        if(!window->Initialize()) {
-            std::cout << "Exception during window creation" << std::endl;
-            return -1;
-        }
-        window->Run();
-    }
-    catch (DxException& e) {
-        MessageBox(nullptr, e.ToString().c_str(), TEXT("HR Failed"), MB_OK);
-    }
-    return 0;
+	try {
+		DxContext::Instance().Initialize();
+		const auto application = new Application{};
+		if (!application->Initialize()) {
+			std::cout << "Exception during application creation\n";
+			return -1;
+		}
+		application->Run();
+	}
+	catch (DxException& e) {
+		MessageBox(nullptr, e.ToString().c_str(), "HR Failed", MB_OK);
+	}
+	return 0;
 }

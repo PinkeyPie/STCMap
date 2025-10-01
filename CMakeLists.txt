@@ -1,18 +1,20 @@
 cmake_minimum_required(VERSION 3.26)
 project(STCMapEngine)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(PROJECT_NAME STCMapEngine)
 if(NOT MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -Wall -Wno-narrowing -Wno-sign-compare -Wno-unused-variable")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-narrowing -Wno-sign-compare -Wno-unused-variable")
 endif ()
 message(${CMAKE_CXX_FLAGS})
+include(FetchContent)
 include(scripts/functions.cmake)
+
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
 set(src_files "")
 set(local_libs_dir "")
 set(src_dirs "")
-set(inc_dirs "")
 
 scan_dirs(${CMAKE_CURRENT_SOURCE_DIR}/src src_dirs)
 foreach (dir_name ${src_dirs})
@@ -41,7 +43,15 @@ foreach (dir_name ${src_dirs})
     endforeach ()
 endforeach ()
 
-if(MSVC)
+set(GLM_TAG master)
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG ${GLM_TAG}
+)
+FetchContent_MakeAvailable(glm)
+
+if(WIN32)
     add_link_options(
             /SUBSYSTEM:WINDOWS
             /DYNAMICBASE
@@ -49,37 +59,32 @@ if(MSVC)
             Comctl32.lib
             /MACHINE:X64
     )
-    set(common_sources)
-    set(common_headers)
-    scan_recurse(common_sources ${PROJECT_SOURCE_DIR}/common .cpp)
-    scan_recurse(common_headers ${PROJECT_SOURCE_DIR}/common .h)
-    add_library(common SHARED ${common_sources} ${common_headers})
-    target_link_libraries(common PUBLIC dxgi d3d12 dxguid d3dcompiler)
-    target_compile_definitions(common PRIVATE COMMON_LIBRARY)
 
-    add_executable(${PROJECT_NAME} ${src_files})
+    set(shaders_dir ${PROJECT_SOURCE_DIR}/shaders)
+    add_executable(${PROJECT_NAME} ${src_files} ${headers})
     target_compile_options(${PROJECT_NAME} INTERFACE /arch:SSE4.1)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE common d2d1)
-    target_include_directories(${PROJECT_NAME} PRIVATE common)
+    target_link_libraries(${PROJECT_NAME} PRIVATE dxgi d3d12 dxguid d3dcompiler runtimeobject glm)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${shaders_dir}/common ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 
-#    add_custom_target(shaders)
-#    set(HLSL_SHADER_FILES src/shaders/color.hlsl)
-#    set_source_files_properties(src/shaders/color.hlsl PROPERTIES ShaderType "ps")
-#    set_source_files_properties(${HLSL_SHADER_FILES} PROPERTIES ShaderModel "5_1")
-#    foreach (FILE ${HLSL_SHADER_FILES})
-#        get_filename_component(FILE_WE ${FILE} NAME_WE)
-#        get_source_file_property(shadertype ${FILE} ShaderType)
-#        get_source_file_property(shadermodel ${FILE} ShaderModel)
-#        add_custom_command(TARGET shaders
-#                COMMAND fxc.exe ${FILE} /nologo /E "PS" /T ${shadertype}_${shadermodel} /Zi /Fo "${CMAKE_BINARY_DIR}/${FILE_WE}.cso" /Fd "${CMAKE_BINARY_DIR}/${FILE_WE}.pdb"
-#                MAIN_DEPENDENCY ${FILE}
-#                COMMENT "HLSL ${FILE}"
-#                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders
-#                VERBATIM
-#        )
-#    endforeach (FILE)
-#    add_dependencies(${PROJECT_NAME} shaders)
+    #[[add_custom_target(shaders)
+    set(HLSL_SHADER_FILES ${shaders_dir})
+
+    set_source_files_properties(src/shaders/color.hlsl PROPERTIES ShaderType "ps")
+    set_source_files_properties(${HLSL_SHADER_FILES} PROPERTIES ShaderModel "5_1")
+    foreach (FILE ${HLSL_SHADER_FILES})
+        get_filename_component(FILE_WE ${FILE} NAME_WE)
+        get_source_file_property(shadertype ${FILE} ShaderType)
+        get_source_file_property(shadermodel ${FILE} ShaderModel)
+        add_custom_command(TARGET shaders
+                COMMAND fxc.exe ${FILE} /nologo /E "PS" /T ${shadertype}_${shadermodel} /Zi /Fo "${CMAKE_BINARY_DIR}/${FILE_WE}.cso" /Fd "${CMAKE_BINARY_DIR}/${FILE_WE}.pdb"
+                MAIN_DEPENDENCY ${FILE}
+                COMMENT "HLSL ${FILWE}"
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders
+                VERBATIM
+        )
+    endforeach (FILE)
+    add_dependencies(${PROJECT_NAME} shaders)]]
 else ()
     add_executable(${PROJECT_NAME} ${src_files})
     target_compile_options(${PROJECT_NAME} INTERFACE -msse4.1)
@@ -95,10 +100,36 @@ if(EXISTS ${PROJECT_SOURCE_DIR}/src/shaders)
     endforeach ()
 endif ()
 
+if(EXISTS ${PROJECT_SOURCE_DIR}/assets)
+    if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/assets)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/assets)
+    endif()
+    if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/assets/meshes)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/assets/meshes)
+    endif()
+    if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/assets/textures)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/assets/textures)
+    endif()
+    file(GLOB dir RELATIVE ${PROJECT_SOURCE_DIR}/assets/meshes ${PROJECT_SOURCE_DIR}/assets/meshes/*)
+    foreach (file ${dir})
+        file(COPY_FILE ${PROJECT_SOURCE_DIR}/assets/meshes/${file} ${CMAKE_CURRENT_BINARY_DIR}/assets/meshes/${file})
+    endforeach ()
+    file(GLOB dir RELATIVE ${PROJECT_SOURCE_DIR}/assets/textures ${PROJECT_SOURCE_DIR}/assets/textures/*)
+    foreach (file ${dir})
+        file(COPY_FILE ${PROJECT_SOURCE_DIR}/assets/textures/${file} ${CMAKE_CURRENT_BINARY_DIR}/assets/textures/${file})
+    endforeach ()
+endif()
+
 if(EXISTS ${PROJECT_SOURCE_DIR}/resources)
     file(GLOB dir RELATIVE ${PROJECT_SOURCE_DIR}/resources ${PROJECT_SOURCE_DIR}/resources/*)
     foreach (file ${dir})
-        file(COPY_FILE ${PROJECT_SOURCE_DIR}/resources/${file} ${CMAKE_CURRENT_BINARY_DIR}/${file})
+        set(file_source ${PROJECT_SOURCE_DIR}/resources/${file})
+        set(file_target ${PROJECT_BINARY_DIR}/resources/${file})
+        if(IS_DIRECTORY ${file_source})
+            file(COPY ${file_source} DESTINATION ${file_target})
+        else()
+            configure_file(${file_source} ${file_target} COPYONLY)
+        endif()
     endforeach ()
 endif ()
 
