@@ -12,7 +12,12 @@ public:
 	uint64 RenderToWindow(float* clearColor);
 	void Run();
 	bool Initialize();
+	static Application* Instance() {
+		return _instance;
+	}
+	uint32 NumOpenWindows = 0;
 private:
+	static Application* _instance;
 	UserInput _input = {};
 	DirectWindow _mainWindow = {};
 	GameTimer _timer;

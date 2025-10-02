@@ -11,7 +11,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLin
 #endif
 	try {
 		DxContext::Instance().Initialize();
-		const auto application = new Application{};
+		const auto application = Application::Instance();
 		if (!application->Initialize()) {
 			std::cout << "Exception during application creation\n";
 			return -1;
@@ -19,7 +19,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLin
 		application->Run();
 	}
 	catch (DxException& e) {
-		MessageBox(nullptr, e.ToString().c_str(), "HR Failed", MB_OK);
+		MessageBox(nullptr, e.ToString().c_str(), L"HR Failed", MB_OK);
 	}
 	return 0;
 }

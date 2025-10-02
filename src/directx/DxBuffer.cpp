@@ -140,20 +140,18 @@ DxVertexBuffer DxVertexBuffer::CreateUpload(DxContext* context, uint32 elementSi
 	return result;
 }
 
-namespace {
-	DXGI_FORMAT GetIndexBufferFormat(uint32 elementSize) {
-		DXGI_FORMAT result = DXGI_FORMAT_UNKNOWN;
-		if (elementSize == 1) {
-			result = DXGI_FORMAT_R8_UINT;
-		}
-		else if (elementSize == 2) {
-			result = DXGI_FORMAT_R16_UINT;
-		}
-		else if (elementSize == 4) {
-			result = DXGI_FORMAT_R32_UINT;
-		}
-		return result;
+DXGI_FORMAT DxIndexBuffer::GetIndexBufferFormat(uint32 elementSize) {
+	DXGI_FORMAT result = DXGI_FORMAT_UNKNOWN;
+	if (elementSize == 1) {
+		result = DXGI_FORMAT_R8_UINT;
 	}
+	else if (elementSize == 2) {
+		result = DXGI_FORMAT_R16_UINT;
+	}
+	else if (elementSize == 4) {
+		result = DXGI_FORMAT_R32_UINT;
+	}
+	return result;
 }
 
 DxIndexBuffer DxIndexBuffer::Create(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {

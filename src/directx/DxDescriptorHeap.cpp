@@ -12,13 +12,15 @@ void DxDescriptorHeap::Initialize(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDes
 		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	}
 
-	ThrowIfFailed(dxContext.Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(DescriptorHeap.GetAddressOf())));
+	ThrowIfFailed(dxContext.Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&DescriptorHeap)));
 
 	Type = type;
 	MaxNumDescriptors = numDescriptors;
 	DescriptorHandleIncrementSize = dxContext.Device->GetDescriptorHandleIncrementSize(type);
 	Base.CpuHandle = DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	Base.GpuHandle = DescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	if (shaderVisible) {
+		Base.GpuHandle = DescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	}
 }
 
 DxCbvSrvUavDescriptorHeap DxCbvSrvUavDescriptorHeap::Create(uint32 numDescriptors, bool shaderVisible) {

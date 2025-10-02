@@ -3,28 +3,27 @@
 LRESULT BaseWindow::WindowsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	BaseWindow* pThis = nullptr;
 	if (uMsg == WM_NCCREATE) {
-		const auto pCreate = (CREATESTRUCT*)(lParam);
-		pThis = (BaseWindow*)(pCreate->lpCreateParams);
-		SetWindowLong(hwnd, GWLP_USERDATA, (LONG_PTR)(pThis));
+		const auto pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
+		pThis = static_cast<BaseWindow*>(pCreate->lpCreateParams);
+		SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(pThis));
 		pThis->hwnd = hwnd;
 	}
 	else {
-		pThis = (BaseWindow*)(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+		pThis = reinterpret_cast<BaseWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 	}
 	if (pThis) {
 		return pThis->HandleMessage(uMsg, wParam, lParam);
 	}
-	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
-BOOL BaseWindow::Create(PCTCH lpWindowName, DWORD dwStyle, DWORD dwExStyle, int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu) {
-	hAppInstance = GetModuleHandle(nullptr);
-	if (GetClassInfo(hAppInstance, ClassName(), nullptr)) {
+BOOL BaseWindow::Create(PCWCH lpWindowName, DWORD dwStyle, DWORD dwExStyle, int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu) {
+	hAppInstance = GetModuleHandleW(nullptr);
+	if (GetClassInfoW(hAppInstance, ClassName(), nullptr)) {
 		return FALSE;
 	}
 	WNDCLASS wc = {};
 	wc.style = CS_HREDRAW | CS_VREDRAW;
-	wc.lpszClassName = ClassName();
 	wc.lpfnWndProc = WindowsProc;
 	wc.hInstance = hAppInstance;
 	wc.cbClsExtra = 0;
@@ -34,24 +33,33 @@ BOOL BaseWindow::Create(PCTCH lpWindowName, DWORD dwStyle, DWORD dwExStyle, int 
 	wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(NULL_BRUSH));
 	wc.lpszMenuName = nullptr;
 	wc.lpszClassName = ClassName();
-	if (!RegisterClass(&wc)) {
-		MessageBox(0, "RegisterClass failed.", 0, 0);
+	if (!RegisterClassW(&wc)) {
+		MessageBoxW(0, L"RegisterClass failed.", 0, 0);
 		return FALSE;
 	}
 
 	RECT R = { 0, 0, ClientWidth, ClientHeight };
 	AdjustWindowRect(&R, WS_OVERLAPPEDWINDOW, false);
-	int width = R.right - R.left;
-	int height = R.bottom - R.top;
-
-	hwnd = CreateWindowEx(dwExStyle, ClassName(), lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hAppInstance, this);
+	
+	hwnd = CreateWindowExW(dwExStyle, ClassName(), lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hAppInstance, this);
 	if (!hwnd) {
-		MessageBox(nullptr, TEXT("CreateWindow Failed."), nullptr, 0);
+		MessageBoxW(nullptr, L"CreateWindow Failed.", nullptr, 0);
 	}
 	ShowWindow(hwnd, SW_SHOW);
 	UpdateWindow(hwnd);
 
 	return TRUE;
+}
+
+void BaseWindow::SetTitle(const WCHAR* format, ...) {
+	WCHAR titleBuffer[128];
+	
+	va_list arg;
+	va_start(arg, format);
+	_vstprintf_s(titleBuffer, format, arg);
+	va_end(arg);
+
+	SetWindowTextW(hwnd, titleBuffer);
 }
 
 LRESULT BaseWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -90,6 +98,8 @@ LRESULT BaseWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-bool BaseWindow::Initialize() {
-	return Create(TEXT("window"), WS_OVERLAPPEDWINDOW);
+bool BaseWindow::Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight) {
+	ClientWidth = initialWidth;
+	ClientHeight = initialHeight;
+	return Create(name, WS_OVERLAPPEDWINDOW);
 }

@@ -49,6 +49,7 @@ class DxIndexBuffer : public DxBuffer {
 public:
 	D3D12_INDEX_BUFFER_VIEW View;
 	static DxIndexBuffer Create(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess);
+	static DXGI_FORMAT GetIndexBufferFormat(uint32 elementSize);
 };
 
 class DxMesh {

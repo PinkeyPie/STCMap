@@ -60,24 +60,12 @@ void DxCommandList::SetGraphics32BitConstants(uint32 rootParameterIndex, uint32 
 	CommandList->SetGraphicsRoot32BitConstants(rootParameterIndex, numConstants, constants, 0);
 }
 
-template <typename T>
-void DxCommandList::SetGraphics32BitConstants(uint32 rootParameterIndex, const T& constants) {
-	static_assert(sizeof(T) % 4 == 0, "Size of type must be a multiple of 4 bytes.");
-	SetGraphics32BitConstants(rootParameterIndex, sizeof(T) / 4, &constants);
-}
-
 void DxCommandList::SetComputeRootSignature(DxRootSignature rootSignature) {
 	CommandList->SetComputeRootSignature(rootSignature.Get());
 }
 
 void DxCommandList::SetCompute32BitConstants(uint32 rootParameterIndex, uint32 numConstants, const void* constants) {
 	CommandList->SetComputeRoot32BitConstants(rootParameterIndex, numConstants, constants, 0);
-}
-
-template <typename T>
-void DxCommandList::SetCompute32BitConstants(uint32 rootParameterIndex, const T& constants) {
-	static_assert(sizeof(T) % 4 == 0, "Size of type must be a multiple of 4 bytes.");
-	SetCompute32BitConstants(rootParameterIndex, sizeof(T) / 4, &constants);
 }
 
 DxAllocation DxCommandList::AllocateDynamicBuffer(uint32 sizeInBytes, uint32 alignment) {
@@ -91,20 +79,10 @@ DxDynamicConstantBuffer DxCommandList::UploadDynamicConstantBuffer(uint32 sizeIn
 	return { allocation.GpuPtr, allocation.CpuPtr };
 }
 
-template <typename T>
-DxDynamicConstantBuffer DxCommandList::UploadDynamicConstantBuffer(const T& data) {
-	return UploadDynamicConstantBuffer(sizeof(T), &data);
-}
-
 DxDynamicConstantBuffer DxCommandList::UploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, uint32 sizeInBytes, const void* data) {
 	DxDynamicConstantBuffer address = UploadDynamicConstantBuffer(sizeInBytes, data);
 	CommandList->SetGraphicsRootConstantBufferView(rootParameterIndex, address.GpuPtr);
 	return address;
-}
-
-template <typename T>
-DxDynamicConstantBuffer DxCommandList::UploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, const T& data) {
-	return UploadAndSetGraphicsDynamicConstantBuffer(rootParameterIndex, sizeof(T), &data);
 }
 
 void DxCommandList::SetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, DxDynamicConstantBuffer address) {
@@ -115,11 +93,6 @@ DxDynamicConstantBuffer DxCommandList::UploadAndSetComputeDynamicConstantBuffer(
 	DxDynamicConstantBuffer address = UploadDynamicConstantBuffer(sizeInBytes, data);
 	CommandList->SetComputeRootConstantBufferView(rootParameterIndex, address.GpuPtr);
 	return address;
-}
-
-template <typename T>
-DxDynamicConstantBuffer DxCommandList::UploadAndSetComputeDynamicConstantBuffer(uint32 rootParameterIndex, const T& data) {
-	return UploadAndSetComputeDynamicConstantBuffer(rootParameterIndex, sizeof(T), &data);
 }
 
 void DxCommandList::SetComputeDynamicConstantBuffer(uint32 rootParameterIndex, DxDynamicConstantBuffer address) {
@@ -219,7 +192,7 @@ void DxCommandList::SetRenderTarget(DxRenderTarget& renderTarget, uint32 arraySl
 	CommandList->OMSetRenderTargets(renderTarget.NumAttachments, renderTarget.RtvHandles, FALSE, dsv);
 }
 
-void DxCommandList::ClearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, float* clearColor) {
+void DxCommandList::ClearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* clearColor) {
 	CommandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 }
 
@@ -237,6 +210,10 @@ void DxCommandList::ClearDepthAndStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float 
 
 void DxCommandList::SetStencilReference(uint32 stencilReference) {
 	CommandList->OMSetStencilRef(stencilReference);
+}
+
+void DxCommandList::SetBlendFactor(const float* blendFactor) {
+	CommandList->OMSetBlendFactor(blendFactor);
 }
 
 void DxCommandList::Draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance) {

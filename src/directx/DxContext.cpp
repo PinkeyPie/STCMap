@@ -29,6 +29,7 @@ void DxContext::CreateFactory() {
 
 void DxContext::CreateAdapter() {
 	Com<IDXGIAdapter1> dxgiAdapter1;
+	DxAdapter dxgiAdapter;
 
 	size_t maxDedicatedVideoMemory = 0;
 	for (uint32 i = 0; Factory->EnumAdapters1(i, dxgiAdapter1.GetAddressOf()) != DXGI_ERROR_NOT_FOUND; i++) {
@@ -43,9 +44,11 @@ void DxContext::CreateAdapter() {
 				D3D_FEATURE_LEVEL_12_1, __uuidof(ID3D12Device), nullptr)) and
 			dxgiAdapterDesc1.DedicatedVideoMemory > maxDedicatedVideoMemory) {
 			maxDedicatedVideoMemory = dxgiAdapterDesc1.DedicatedVideoMemory;
-			ThrowIfFailed(dxgiAdapter1.As(&Adapter));
+			ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter));
 		}
 	}
+
+	Adapter = dxgiAdapter;
 }
 
 void DxContext::CreateDevice() {
@@ -135,7 +138,7 @@ DxCommandList* DxContext::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type) {
 	DxCommandAllocator* allocator = GetFreeCommandAllocator(type);
 	result->CommandAllocator = allocator;
 
-	ThrowIfFailed(Device->CreateCommandList(0, type, allocator->CommandAllocator.Get(), nullptr, IID_PPV_ARGS(result->CommandList.GetAddressOf())));
+	ThrowIfFailed(Device->CreateCommandList(0, type, allocator->CommandAllocator.Get(), nullptr, IID_PPV_ARGS(result->CommandList.GetAddressOf())))
 
 	return result;
 }
@@ -200,6 +203,9 @@ DxCommandAllocator* DxContext::GetFreeCommandAllocator(DxCommandQueue& queue) {
 
 	if (!result) {
 		result = AllocateCommandAllocator(queue.CommandListType);
+	}
+	if (!result->CommandAllocator) {
+		ThrowIfFailed(Device->CreateCommandAllocator(queue.CommandListType, IID_PPV_ARGS(result->CommandAllocator.GetAddressOf())));
 	}
 	return result;
 }

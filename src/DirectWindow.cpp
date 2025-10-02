@@ -1,4 +1,6 @@
 #include "DirectWindow.h"
+
+#include "Application.h"
 #include "directx/DxContext.h"
 
 namespace {
@@ -67,9 +69,6 @@ void DirectWindow::CreateSwapchain(const DxCommandQueue& commandQueue) {
 void DirectWindow::CheckForHdrSupport() {
 	DxFactory factory = DxContext::Instance().Factory;
 	RECT windowRect = { 0, 0, (LONG)ClientWidth, (LONG)ClientHeight };
-	if (not Initialized) {
-		AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
-	}
 	GetWindowRect(hwnd, &windowRect);
 
 	if (ColorDepth == EColorDepth8) {
@@ -192,15 +191,13 @@ void DirectWindow::UpdateRenderTargetView() {
 	}
 }
 
-bool DirectWindow::Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight, ::ColorDepth colorDepth, DXGI_FORMAT depthFormat) {
-	bool result = BaseWindow::Initialize();
+bool DirectWindow::Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight) {
+	bool result = BaseWindow::Initialize(name, initialWidth, initialHeight);
 	if (!result) {
 		return false;
 	}
 
 	DxContext& dxContext = DxContext::Instance();
-	ColorDepth = colorDepth;
-	DepthFormat = depthFormat;
 	CheckTearingSupport();
 
 	CreateSwapchain(dxContext.RenderQueue);
@@ -217,9 +214,9 @@ bool DirectWindow::Initialize(const TCHAR* name, uint32 initialWidth, uint32 ini
 	SetSwapChainColorSpace();
 	UpdateRenderTargetView();
 
-	assert(depthFormat == DXGI_FORMAT_UNKNOWN or IsDepthFormat(depthFormat));
-	if (depthFormat != DXGI_FORMAT_UNKNOWN) {
-		DepthBuffer = DxTexture::CreateDepth(&dxContext, ClientWidth, ClientHeight, depthFormat);
+	assert(DepthFormat == DXGI_FORMAT_UNKNOWN or IsDepthFormat(DepthFormat));
+	if (DepthFormat != DXGI_FORMAT_UNKNOWN) {
+		DepthBuffer = DxTexture::CreateDepth(&dxContext, ClientWidth, ClientHeight, DepthFormat);
 	}
 
 	Initialized = true;
@@ -255,8 +252,8 @@ void DirectWindow::ResizeHandle() {
 	}
 }
 
-PCTCH DirectWindow::ClassName() const {
-	return "DirectWindow";
+PCWCH DirectWindow::ClassName() const {
+	return L"DirectWindow";
 }
 
 void DirectWindow::SwapBuffers() {
@@ -287,6 +284,7 @@ LRESULT DirectWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	case WM_DESTROY: {
 		if (Open) {
 			Open = false;
+			Application::Instance()->NumOpenWindows--;
 			Shutdown();
 		}
 		break;

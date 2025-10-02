@@ -11,7 +11,7 @@ public:
 	DirectWindow(const DirectWindow&) = delete;
 	DirectWindow& operator=(const DirectWindow&) = delete;
 
-	bool Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight, ColorDepth colorDepth, DXGI_FORMAT depthFormat);
+	bool Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight) override;
 
 	virtual void Shutdown();
 	virtual void SwapBuffers();
@@ -26,18 +26,18 @@ public:
 	uint32 RtvDescriptorSize;
 	uint32 CurrentBackBufferIndex;
 
-	ColorDepth ColorDepth;
+	ColorDepth ColorDepth = EColorDepth8;
 
 	RECT WindowRectBeforeFullscreen;
 
-	bool TearingSupported;
-	bool HdrSupport;
+	bool TearingSupported = false;
+	bool HdrSupport = false;
 	bool VSync = false;
 	bool Open = true;
 	bool Initialized = false;
 
 	DxTexture DepthBuffer;
-	DXGI_FORMAT DepthFormat;
+	DXGI_FORMAT DepthFormat = DXGI_FORMAT_UNKNOWN;
 private:
 	void CreateSwapchain(const DxCommandQueue& commandQueue);
 	void CheckForHdrSupport();

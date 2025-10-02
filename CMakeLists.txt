@@ -64,6 +64,7 @@ if(WIN32)
     add_executable(${PROJECT_NAME} ${src_files} ${headers})
     target_compile_options(${PROJECT_NAME} INTERFACE /arch:SSE4.1)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
     target_link_libraries(${PROJECT_NAME} PRIVATE dxgi d3d12 dxguid d3dcompiler runtimeobject glm)
     target_include_directories(${PROJECT_NAME} PRIVATE ${shaders_dir}/common ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 

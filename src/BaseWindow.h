@@ -9,13 +9,14 @@ public:
 
     static LRESULT CALLBACK WindowsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     [[nodiscard]] HWND GetWindow() const { return hwnd; }
-    virtual bool Initialize();
+    virtual bool Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight);
+    void SetTitle(const WCHAR* format, ...);
 
     int ClientWidth = 800;
     int ClientHeight = 600;
 
 protected:
-    BOOL Create(PCTCH lpWindowName,
+    BOOL Create(PCWCH lpWindowName,
         DWORD dwStyle,
         DWORD dwExStyle = 0,
         int x = CW_USEDEFAULT,
@@ -24,7 +25,7 @@ protected:
         int nHeight = CW_USEDEFAULT,
         HWND hWndParent = nullptr,
         HMENU hMenu = nullptr);
-    [[nodiscard]] virtual PCTCH ClassName() const = 0;
+    virtual PCWCH ClassName() const = 0;
     virtual void MouseDownHandle(WPARAM btnState, int x, int y) {}
     virtual void MouseUpHandle(WPARAM btnState, int x, int y) {}
     virtual void MouseMoveHandle(WPARAM btnState, int x, int y) {}

@@ -2,45 +2,43 @@
 
 #include "dx/d3dx12.h"
 #include <dxgi1_6.h>
+#include <d3dcompiler.h>
 #include <wrl.h>
 #include <comdef.h>
 
 template<class T>
 using Com = Microsoft::WRL::ComPtr<T>;
 
+inline std::wstring AnsiToWString(const std::string& str) {
+    WCHAR buffer[MAX_PATH];
+    MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, buffer, 512);
+    return { buffer };
+}
+
 class DxException : public std::exception {
 public:
     DxException() = default;
-    DxException(HRESULT hr, const std::string& funcName, const std::string& filename, int lineNumber)
+    DxException(HRESULT hr, const std::wstring& funcName, const std::wstring& filename, int lineNumber)
 	: ErrorCode(hr), FunctionName(funcName), FileName(filename), LineNumber(lineNumber) {}
 
-    [[nodiscard]] std::string ToString() const {
-        const _com_error err(ErrorCode);
-        std::string fileInfo = __FILE__;
-        const std::string msg(err.ErrorMessage());
-        return FunctionName + " failed in " + FileName + "; line " + std::to_string(LineNumber) + "; error " + msg.c_str();
+    [[nodiscard]] std::wstring ToString() const {
+        const _com_error err(ErrorCode);        
+        std::wstring fileInfo = AnsiToWString(__FILE__);
+        const std::wstring msg(err.ErrorMessage());
+        return FunctionName + L" failed in " + FileName + L"; line " + std::to_wstring(LineNumber) + L"; error " + msg.c_str();
     }
     HRESULT ErrorCode = S_OK;
-    std::string FunctionName;
-    std::string FileName;
+    std::wstring FunctionName;
+    std::wstring FileName;
     int LineNumber = -1;
 };
 
-#ifdef _UNICODE
 #ifndef ThrowIfFailed
 #define ThrowIfFailed(hr)                                            \
 {                                                                    \
 HRESULT hr__ = (hr);                                                 \
 std::wstring wfn = AnsiToWString(__FILE__);                          \
-if(FAILED(hr__)) { throw DxException(hr__, L#hr, wfn, __LINE__); }   \
-}
-#endif
-#else
-#define ThrowIfFailed(hr)                                            \
-{                                                                    \
-HRESULT hr__ = (hr);                                                 \
-std::string wfn = __FILE__;                                          \
-if(FAILED(hr__)) { throw DxException(hr__, #hr, wfn, __LINE__); }    \
+if(FAILED(hr__))  throw DxException(hr__, L#hr, wfn, __LINE__);      \
 }
 #endif
 

@@ -3,6 +3,8 @@
 #include "directx/DxCommandList.h"
 #include "directx/DxContext.h"
 
+Application* Application::_instance = new Application{};
+
 namespace {
 	LONG NTAPI HandleVectoredException(PEXCEPTION_POINTERS exceptionInfo) {
 		PEXCEPTION_RECORD exceptionRecord = exceptionInfo->ExceptionRecord;
@@ -136,7 +138,6 @@ bool Application::HandleWindowsMessages() {
 					_input.Keyboard[button].IsDown = isDown;
 					_input.Keyboard[button].WasDown = wasDown;
 				}
-
 				if (button == EButton_alt) {
 					TranslateMessage(&msg);
 					DispatchMessage(&msg);
@@ -224,8 +225,8 @@ bool Application::HandleWindowsMessages() {
 	_input.Mouse.RelDx = _input.Mouse.RelX - oldMouseRelX;
 	_input.Mouse.RelDy = _input.Mouse.RelY - oldMouseRelY;
 
-	if (ButtonDownEffect(_input, EButton_enter) and _input.Keyboard[EButton_alt].IsDown) {
-		
+	if (NumOpenWindows == 0) {
+		running = false;
 	}
 
 	return running;
@@ -261,10 +262,12 @@ bool Application::Initialize() {
 	SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 	AddVectoredExceptionHandler(TRUE, HandleVectoredException);
 
-	DxContext::Instance().Initialize();	
-	if (not _mainWindow.Initialize(TEXT("Main Window"), 1280, 800, EColorDepth8, DXGI_FORMAT_UNKNOWN)) {
+	_mainWindow.ColorDepth = EColorDepth8;
+	_mainWindow.DepthFormat = DXGI_FORMAT_UNKNOWN;
+	if (not _mainWindow.Initialize(TEXT("Main Window"), 1280, 800)) {
 		return false;
 	}
+	NumOpenWindows++;
 
 	_timer.Reset();
 	return true;
