@@ -12,14 +12,15 @@ void DxBuffer::Unmap() {
 	Resource->Unmap(0, nullptr);
 }
 
-void DxBuffer::Upload(DxContext* context, const void* bufferData) {
-	DxCommandList* commandList = context->GetFreeCopyCommandList();
+void DxBuffer::Upload(const void* bufferData) {
+	DxContext& dxContext = DxContext::Instance();
+	DxCommandList* commandList = dxContext.GetFreeCopyCommandList();
 
 	DxResource intermediateResource;
 
 	D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(TotalSize);
-	ThrowIfFailed(context->Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
@@ -41,20 +42,21 @@ void DxBuffer::Upload(DxContext* context, const void* bufferData) {
 
 	// We are omitting the transition to common hee, since the resource automatically decays to common state after being accessed on a copy queue
 
-	context->RetireObject(intermediateResource);
-	context->ExecuteCommandList(commandList);
+	dxContext.RetireObject(intermediateResource);
+	dxContext.ExecuteCommandList(commandList);
 }
 
-void DxBuffer::UpdateDataRange(DxContext* context, const void* data, uint32 offset, uint32 size) {
+void DxBuffer::UpdateDataRange(const void* data, uint32 offset, uint32 size) {
 	assert(offset + size <= TotalSize);
 
-	DxCommandList* commandList = context->GetFreeCopyCommandList();
+	DxContext& dxContext = DxContext::Instance();
+	DxCommandList* commandList = dxContext.GetFreeCopyCommandList();
 
 	DxResource intermediateResource;
 
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_GPU_UPLOAD);
 	auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
-	ThrowIfFailed(context->Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
@@ -74,11 +76,12 @@ void DxBuffer::UpdateDataRange(DxContext* context, const void* data, uint32 offs
 
 	// We are omitting the transition to common here, since the resource automatically decays to common state after being accessed on a copy queue.
 
-	context->RetireObject(intermediateResource);
-	context->ExecuteCommandList(commandList);
+	dxContext.RetireObject(intermediateResource);
+	dxContext.ExecuteCommandList(commandList);
 }
 
-void DxBuffer::Initialize(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType) {
+void DxBuffer::Initialize(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType) {
+	DxContext& dxContext = DxContext::Instance();
 	D3D12_RESOURCE_FLAGS flags = allowUnorderedAccess ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
 
 	ElementSize = elementSize;
@@ -87,7 +90,7 @@ void DxBuffer::Initialize(DxContext* context, uint32 elementSize, uint32 element
 
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(heapType);
 	auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(TotalSize, flags);
-	ThrowIfFailed(context->Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
@@ -99,7 +102,7 @@ void DxBuffer::Initialize(DxContext* context, uint32 elementSize, uint32 element
 
 	if (data) {
 		if (heapType == D3D12_HEAP_TYPE_DEFAULT) {
-			Upload(context, data);
+			Upload(data);
 		}
 		else if (heapType == D3D12_HEAP_TYPE_UPLOAD) {
 			void* dataPtr = Map();
@@ -110,30 +113,30 @@ void DxBuffer::Initialize(DxContext* context, uint32 elementSize, uint32 element
 }
 
 
-DxBuffer DxBuffer::Create(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState) {
+DxBuffer DxBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState) {
 	DxBuffer result;
-	result.Initialize(context, elementSize, elementCount, data, allowUnorderedAccess, initialState, D3D12_HEAP_TYPE_DEFAULT);
+	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, initialState, D3D12_HEAP_TYPE_DEFAULT);
 	return result;
 }
 
-DxBuffer DxBuffer::CreateUpload(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
+DxBuffer DxBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
 	DxBuffer result;
-	result.Initialize(context, elementSize, elementCount, data, allowUnorderedAccess, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
+	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
 	return result;
 }
 
-DxVertexBuffer DxVertexBuffer::Create(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
+DxVertexBuffer DxVertexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
 	DxVertexBuffer result;
-	result.Initialize(context, elementSize, elementCount, data, allowUnorderedAccess);
+	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess);
 	result.View.BufferLocation = result.GpuVirtualAddress;
 	result.View.SizeInBytes = result.TotalSize;
 	result.View.StrideInBytes = elementSize;
 	return result;
 }
 
-DxVertexBuffer DxVertexBuffer::CreateUpload(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
+DxVertexBuffer DxVertexBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
 	DxVertexBuffer result;
-	result.Initialize(context, elementSize, elementCount, data, allowUnorderedAccess, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
+	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
 	result.View.BufferLocation = result.GpuVirtualAddress;
 	result.View.SizeInBytes = result.TotalSize;
 	result.View.StrideInBytes = elementSize;
@@ -154,9 +157,9 @@ DXGI_FORMAT DxIndexBuffer::GetIndexBufferFormat(uint32 elementSize) {
 	return result;
 }
 
-DxIndexBuffer DxIndexBuffer::Create(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
+DxIndexBuffer DxIndexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
 	DxIndexBuffer result;
-	result.Initialize(context, elementSize, elementCount, data, allowUnorderedAccess);
+	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess);
 	result.View.BufferLocation = result.GpuVirtualAddress;
 	result.View.SizeInBytes = result.TotalSize;
 	result.View.Format = GetIndexBufferFormat(elementSize);

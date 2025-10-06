@@ -24,13 +24,13 @@ public:
 	void* Map();
 	void Unmap();
 
-	void Upload(DxContext* context, const void* bufferData);
-	void UpdateDataRange(DxContext* context, const void* data, uint32 offset, uint32 size);
+	void Upload(const void* bufferData);
+	void UpdateDataRange(const void* data, uint32 offset, uint32 size);
 
-	static DxBuffer Create(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
-	static DxBuffer CreateUpload(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false);
+	static DxBuffer Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
+	static DxBuffer CreateUpload(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false);
 protected:
-	void Initialize(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON, D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT);
+	void Initialize(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON, D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT);
 	DxDescriptorHandle CreateSRV(DxDevice device, DxDescriptorHandle index, BufferRange bufferRange = {}) const;
 	DxDescriptorHandle CreateUAV(DxDevice device, DxDescriptorHandle index, BufferRange bufferRange = {}) const;
 	DxDescriptorHandle CreateRawSRV(DxDevice device, DxDescriptorHandle index, BufferRange bufferRange = {});
@@ -41,14 +41,14 @@ protected:
 class DxVertexBuffer : public DxBuffer {
 public:
 	D3D12_VERTEX_BUFFER_VIEW View;
-	static DxVertexBuffer Create(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false);
-	static DxVertexBuffer CreateUpload(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false);
+	static DxVertexBuffer Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false);
+	static DxVertexBuffer CreateUpload(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false);
 };
 
 class DxIndexBuffer : public DxBuffer {
 public:
 	D3D12_INDEX_BUFFER_VIEW View;
-	static DxIndexBuffer Create(DxContext* context, uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess);
+	static DxIndexBuffer Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false);
 	static DXGI_FORMAT GetIndexBufferFormat(uint32 elementSize);
 };
 

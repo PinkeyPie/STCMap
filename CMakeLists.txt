@@ -51,6 +51,22 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glm)
 
+set(ASSIMP_TAG master)
+FetchContent_Declare(
+    assimp
+    GIT_REPOSITORY https://github.com/assimp/assimp.git
+    GIT_TAG ${ASSIMP_TAG}
+)
+FetchContent_MakeAvailable(assimp)
+
+set(ENTT_TAG master)
+FetchContent_Declare(
+    entt
+    GIT_REPOSITORY https://github.com/skypjack/entt.git
+    GIT_TAG ${ENTT_TAG}
+)
+FetchContent_MakeAvailable(entt)
+
 if(WIN32)
     add_link_options(
             /SUBSYSTEM:WINDOWS
@@ -65,8 +81,9 @@ if(WIN32)
     target_compile_options(${PROJECT_NAME} INTERFACE /arch:SSE4.1)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
     target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE dxgi d3d12 dxguid d3dcompiler runtimeobject glm)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${shaders_dir}/common ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
+    target_link_libraries(${PROJECT_NAME} PRIVATE dxgi d3d12 dxguid d3dcompiler runtimeobject assimp)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${shaders_dir}/common ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+    ${CMAKE_CURRENT_BINARY_DIR}/_deps/entt-src)
 
     #[[add_custom_target(shaders)
     set(HLSL_SHADER_FILES ${shaders_dir})

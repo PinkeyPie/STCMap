@@ -216,7 +216,7 @@ bool DirectWindow::Initialize(const TCHAR* name, uint32 initialWidth, uint32 ini
 
 	assert(DepthFormat == DXGI_FORMAT_UNKNOWN or IsDepthFormat(DepthFormat));
 	if (DepthFormat != DXGI_FORMAT_UNKNOWN) {
-		DepthBuffer = DxTexture::CreateDepth(&dxContext, ClientWidth, ClientHeight, DepthFormat);
+		DepthBuffer = DxTexture::CreateDepth(ClientWidth, ClientHeight, DepthFormat);
 	}
 
 	Initialized = true;
@@ -249,6 +249,10 @@ void DirectWindow::ResizeHandle() {
 		CurrentBackBufferIndex = SwapChain->GetCurrentBackBufferIndex();
 
 		UpdateRenderTargetView();
+
+		if (DepthBuffer.Resource) {
+			DepthBuffer.Resize(ClientWidth, ClientHeight);
+		}
 	}
 }
 

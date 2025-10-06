@@ -4,6 +4,7 @@
 #include "input.h"
 #include "DirectWindow.h"
 #include "GameTimer.h"
+#include "directx/DxPipeline.h"
 
 class Application {
 public:

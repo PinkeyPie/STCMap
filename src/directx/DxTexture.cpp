@@ -1,8 +1,9 @@
 #include "DxTexture.h"
 #include "DxRenderPrimitives.h"
 
-void DxTexture::UploadSubresourceData(DxContext* context, D3D12_SUBRESOURCE_DATA* subresourceData, uint32 firstSubresource, uint32 numSubresources) {
-	DxCommandList* commandList = context->GetFreeCopyCommandList();
+void DxTexture::UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, uint32 firstSubresource, uint32 numSubresources) {
+	DxContext& dxContext = DxContext::Instance();
+	DxCommandList* commandList = dxContext.GetFreeCopyCommandList();
 	commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
 
 	uint64 requiredSize = GetRequiredIntermediateSize(Resource.Get(), firstSubresource, numSubresources);
@@ -10,7 +11,7 @@ void DxTexture::UploadSubresourceData(DxContext* context, D3D12_SUBRESOURCE_DATA
 	DxResource intermediateResource;
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(requiredSize);
-	ThrowIfFailed(context->Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
@@ -20,19 +21,20 @@ void DxTexture::UploadSubresourceData(DxContext* context, D3D12_SUBRESOURCE_DATA
 	));
 
 	UpdateSubresources<128>(commandList->CommandList.Get(), Resource.Get(), intermediateResource.Get(), 0, firstSubresource, numSubresources, subresourceData);
-	context->RetireObject(intermediateResource);
+	dxContext.RetireObject(intermediateResource);
 
 	// We are omitting the transition to common here, since the resource automatically decays to common state after being accessed on a copy queue.
 	// commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
 
-	context->ExecuteCommandList(commandList);
+	dxContext.ExecuteCommandList(commandList);
 }
 
-DxTexture DxTexture::Create(DxContext* context, D3D12_RESOURCE_DESC textureDesc, D3D12_SUBRESOURCE_DATA* subresourceData, uint32 numSubresources, D3D12_RESOURCE_STATES initialState) {
+DxTexture DxTexture::Create(D3D12_RESOURCE_DESC textureDesc, D3D12_SUBRESOURCE_DATA* subresourceData, uint32 numSubresources, D3D12_RESOURCE_STATES initialState) {
+	DxContext& dxContext = DxContext::Instance();
 	DxTexture result;
 
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	ThrowIfFailed(context->Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&textureDesc,
@@ -42,28 +44,28 @@ DxTexture DxTexture::Create(DxContext* context, D3D12_RESOURCE_DESC textureDesc,
 	));
 
 	result.FormatSupport.Format = textureDesc.Format;
-	ThrowIfFailed(context->Device->CheckFeatureSupport(
+	ThrowIfFailed(dxContext.Device->CheckFeatureSupport(
 		D3D12_FEATURE_FORMAT_SUPPORT,
 		&result.FormatSupport,
 		sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)
 	));
 
 	if ((textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 and result.FormatSupportsRTV()) {
-		result.RTVHandles = context->RtvAllocator.PushRenderTargetView(&result);
+		result.RTVHandles = dxContext.RtvAllocator.PushRenderTargetView(&result);
 	}
 
 	if ((textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 9 and (result.FormatSupportsDSV() or IsDepthFormat(textureDesc.Format))) {
-		result.DSVHandle = context->DsvAllocator.PushDepthStencilView(&result);
+		result.DSVHandle = dxContext.DsvAllocator.PushDepthStencilView(&result);
 	}
 
 	if (subresourceData) {
-		result.UploadSubresourceData(context, subresourceData, 0, numSubresources);
+		result.UploadSubresourceData(subresourceData, 0, numSubresources);
 	}
 
 	return result;
 }
 
-DxTexture DxTexture::Create(DxContext* context, const void* data, uint32 width, uint32 height, DXGI_FORMAT format, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState) {
+DxTexture DxTexture::Create(const void* data, uint32 width, uint32 height, DXGI_FORMAT format, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState) {
 	D3D12_RESOURCE_FLAGS flags = allowUnorderedAccess ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
 
 	CD3DX12_RESOURCE_DESC textureDesc = CD3DX12_RESOURCE_DESC::Tex2D(format, width, height, 1, 1, 1, 0, flags);
@@ -76,14 +78,15 @@ DxTexture DxTexture::Create(DxContext* context, const void* data, uint32 width, 
 		subresource.SlicePitch = width * height * formatSize;
 		subresource.pData = data;
 
-		return Create(context, textureDesc, &subresource, 1, initialState);
+		return Create(textureDesc, &subresource, 1, initialState);
 	}
 	else {
-		return Create(context, textureDesc, nullptr, 0, initialState);
+		return Create(textureDesc, nullptr, 0, initialState);
 	}
 }
 
-DxTexture DxTexture::CreateDepth(DxContext* context, uint32 width, uint32 height, DXGI_FORMAT format) {
+DxTexture DxTexture::CreateDepth(uint32 width, uint32 height, DXGI_FORMAT format) {
+	DxContext& dxContext = DxContext::Instance();
 	DxTexture result;
 
 	D3D12_CLEAR_VALUE optimizedClearValue = {};
@@ -93,7 +96,7 @@ DxTexture DxTexture::CreateDepth(DxContext* context, uint32 width, uint32 height
 	D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(format, width, height, 1, 0, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	ThrowIfFailed(context->Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
@@ -103,18 +106,19 @@ DxTexture DxTexture::CreateDepth(DxContext* context, uint32 width, uint32 height
 	));
 
 	result.FormatSupport.Format = format;
-	ThrowIfFailed(context->Device->CheckFeatureSupport(
+	ThrowIfFailed(dxContext.Device->CheckFeatureSupport(
 		D3D12_FEATURE_FORMAT_SUPPORT,
 		&result.FormatSupport,
 		sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)
 	));
 
-	result.DSVHandle = context->DsvAllocator.PushDepthStencilView(&result);
+	result.DSVHandle = dxContext.DsvAllocator.PushDepthStencilView(&result);
 
 	return result;
 }
 
-void DxTexture::Resize(DxContext* context, uint32 newWidth, uint32 newHeight, D3D12_RESOURCE_STATES initialState) {
+void DxTexture::Resize(uint32 newWidth, uint32 newHeight, D3D12_RESOURCE_STATES initialState) {
+	DxContext& dxContext = DxContext::Instance();
 	D3D12_RESOURCE_DESC desc = Resource->GetDesc();
 
 	D3D12_RESOURCE_STATES state = initialState;
@@ -128,13 +132,13 @@ void DxTexture::Resize(DxContext* context, uint32 newWidth, uint32 newHeight, D3
 		clearValue = &optimizedClearValue;
 	}
 
-	context->RetireObject(Resource);
+	dxContext.RetireObject(Resource);
 
 	desc.Width = newWidth;
 	desc.Height = newHeight;
 
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
-	ThrowIfFailed(context->Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&desc,
@@ -144,11 +148,11 @@ void DxTexture::Resize(DxContext* context, uint32 newWidth, uint32 newHeight, D3
 	));
 
 	if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 and FormatSupportsRTV()) {
-		context->RtvAllocator.CreateRenderTargetView(this, RTVHandles);
+		dxContext.RtvAllocator.CreateRenderTargetView(this, RTVHandles);
 	}
 
 	if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-		context->DsvAllocator.CreateDepthStencilView(this, DSVHandle);
+		dxContext.DsvAllocator.CreateDepthStencilView(this, DSVHandle);
 	}
 }
 
