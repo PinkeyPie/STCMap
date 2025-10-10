@@ -1,6 +1,23 @@
 #include "DxRenderPrimitives.h"
 #include "DxContext.h"
 
+DxRootSignature CreateRootSignature(DxBlob rootSignatureBlob) {
+	DxContext& dxContext = DxContext::Instance();
+	DxRootSignature rootSignature;
+
+	ThrowIfFailed(dxContext.Device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
+		rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(rootSignature.GetAddressOf())));
+
+	return rootSignature;
+}
+
+DxRootSignature CreateRootSignature(const wchar* path) {
+	DxBlob rootSignatureBlob;
+	ThrowIfFailed(D3DReadFileToBlob(path, rootSignatureBlob.GetAddressOf()));
+
+	return CreateRootSignature(rootSignatureBlob);
+}
+
 DxRootSignature CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC1& desc) {
 	DxContext& dxContext = DxContext::Instance();
 	D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
@@ -65,6 +82,13 @@ DxCommandSignature CreateCommandSignature(DxRootSignature rootSignature, const D
 		IID_PPV_ARGS(commandSignature.GetAddressOf())));
 	return commandSignature;
 }
+
+DxRootSignature CreateRootSignature(D3D12_ROOT_SIGNATURE_FLAGS flags) {
+	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+	rootSignatureDesc.Flags = flags;
+	return CreateRootSignature(rootSignatureDesc);
+}
+
 
 DxCommandSignature CreateCommandSignature(DxRootSignature rootSignature, D3D12_INDIRECT_ARGUMENT_DESC* argumentDescs, uint32 numArgumentDescs, uint32 commandStructureSize) {
 	D3D12_COMMAND_SIGNATURE_DESC commandSignatureDesc;

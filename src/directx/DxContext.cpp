@@ -52,9 +52,9 @@ void DxContext::CreateAdapter() {
 }
 
 void DxContext::CreateDevice() {
-	ThrowIfFailed(D3D12CreateDevice(Adapter.Get(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(Device.GetAddressOf())));
+	ThrowIfFailed(D3D12CreateDevice(Adapter.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(Device.GetAddressOf())));
 
-#ifdef _DEBUG
+#ifdef F
 	Com<ID3D12InfoQueue> infoQueue;
 	if (SUCCEEDED(Device.As(&infoQueue))) {
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
@@ -98,11 +98,11 @@ void DxContext::Initialize() {
 	RaytracingSupported = CheckRaytracingSupport(Device);
 
 	Arena.MinimumBlockSize = MB(2);
-	AllocationMutex = ThreadMutex::Create();
 	BufferedFrameId = NUM_BUFFERED_FRAMES - 1;
 
 	for (uint32 i = 0; i < NUM_BUFFERED_FRAMES; i++) {
-		PagePools[i] = DxPagePool::Create(Device, MB(2));
+		PagePools[i].Device = Device;
+		PagePools[i].PageSize = MB(2);
 	}
 
 	RenderQueue.Initialize(Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -111,7 +111,7 @@ void DxContext::Initialize() {
 
 	RtvAllocator = DxRtvDescriptorHeap::CreateRTVDescriptorAllocator(1024);
 	DsvAllocator = DxDsvDescriptorHeap::CreateDSVDescriptorAllocator(1024);
-	FrameDescriptorAllocator = DxFrameDescriptorAllocator::Create();
+	FrameDescriptorAllocator.Device = Device;
 }
 
 void DxContext::FlushApplication() {
@@ -123,15 +123,15 @@ void DxContext::FlushApplication() {
 void DxContext::Quit() {
 	Running = false;
 	FlushApplication();
-	WaitForSingleObject(RenderQueue.ProcessThreadHandle, INFINITE);
-	WaitForSingleObject(ComputeQueue.ProcessThreadHandle, INFINITE);
-	WaitForSingleObject(CopyQueue.ProcessThreadHandle, INFINITE);
+	RenderQueue.ProcessThread.join();
+	ComputeQueue.ProcessThread.join();
+	CopyQueue.ProcessThread.join();
 }
 
 DxCommandList* DxContext::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type) {
-	AllocationMutex.Lock();
-	DxCommandList* result = (DxCommandList*)Arena.Allocate(sizeof(DxCommandList), true);
-	AllocationMutex.Unlock();
+	AllocationMutex.lock();
+	DxCommandList* result = static_cast<DxCommandList*>(Arena.Allocate(sizeof(DxCommandList), true));
+	AllocationMutex.unlock();
 
 	result->Type = type;
 
@@ -144,9 +144,9 @@ DxCommandList* DxContext::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type) {
 }
 
 DxCommandAllocator* DxContext::AllocateCommandAllocator(D3D12_COMMAND_LIST_TYPE type) {
-	AllocationMutex.Lock();
-	DxCommandAllocator* result = (DxCommandAllocator*)Arena.Allocate(sizeof(DxCommandAllocator), true);
-	AllocationMutex.Unlock();
+	AllocationMutex.lock();
+	DxCommandAllocator* result = static_cast<DxCommandAllocator*>(Arena.Allocate(sizeof(DxCommandAllocator), true));
+	AllocationMutex.unlock();
 
 	ThrowIfFailed(Device->CreateCommandAllocator(type, IID_PPV_ARGS(result->CommandAllocator.GetAddressOf())));
 
@@ -160,12 +160,12 @@ DxCommandQueue& DxContext::GetQueue(D3D12_COMMAND_LIST_TYPE type) {
 }
 
 DxCommandList* DxContext::GetFreeCommandList(DxCommandQueue& queue) {
-	queue.CommandListMutex.Lock();
+	queue.CommandListMutex.lock();
 	DxCommandList* result = queue.FreeCommandLists;
 	if (result) {
 		queue.FreeCommandLists = result->Next;
 	}
-	queue.CommandListMutex.Unlock();
+	queue.CommandListMutex.unlock();
 
 	if (!result) {
 		result = AllocateCommandList(queue.CommandListType);
@@ -194,12 +194,12 @@ DxCommandList* DxContext::GetFreeRenderCommandList() {
 }
 
 DxCommandAllocator* DxContext::GetFreeCommandAllocator(DxCommandQueue& queue) {
-	queue.CommandListMutex.Lock();
+	queue.CommandListMutex.lock();
 	DxCommandAllocator* result = queue.FreeCommandAllocators;
 	if (result) {
 		queue.FreeCommandAllocators = result->Next;
 	}
-	queue.CommandListMutex.Unlock();
+	queue.CommandListMutex.unlock();
 
 	if (!result) {
 		result = AllocateCommandAllocator(queue.CommandListType);
@@ -228,7 +228,7 @@ uint64 DxContext::ExecuteCommandList(DxCommandList* commandList) {
 	DxCommandAllocator* allocator = commandList->CommandAllocator;
 	allocator->LastExecutionFenceValue = fenceValue;
 
-	queue.CommandListMutex.Lock();
+	queue.CommandListMutex.lock();
 
 	allocator->Next = queue.RunningCommandAllocators;
 	queue.RunningCommandAllocators = allocator;
@@ -237,7 +237,7 @@ uint64 DxContext::ExecuteCommandList(DxCommandList* commandList) {
 	commandList->Next = queue.FreeCommandLists;
 	queue.FreeCommandLists = commandList;
 
-	queue.CommandListMutex.Unlock();
+	queue.CommandListMutex.unlock();
 
 	return fenceValue;
 }

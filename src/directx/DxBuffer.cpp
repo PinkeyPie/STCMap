@@ -40,8 +40,7 @@ void DxBuffer::Upload(const void* bufferData) {
 		Resource.Get(), intermediateResource.Get(),
 		0, 0, 1, &subresourceData);
 
-	// We are omitting the transition to common hee, since the resource automatically decays to common state after being accessed on a copy queue
-
+	// We are omitting the transition to common here, since the resource automatically decays to common state after being accessed on a copy queue
 	dxContext.RetireObject(intermediateResource);
 	dxContext.ExecuteCommandList(commandList);
 }
@@ -88,8 +87,8 @@ void DxBuffer::Initialize(uint32 elementSize, uint32 elementCount, void* data, b
 	ElementCount = elementCount;
 	TotalSize = elementSize * elementCount;
 
-	auto heapProperties = CD3DX12_HEAP_PROPERTIES(heapType);
-	auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(TotalSize, flags);
+	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(heapType);
+	const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(TotalSize, flags);
 	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,

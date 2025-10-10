@@ -79,13 +79,41 @@ void CpuMesh::Reserve(uint32 vertexCount, uint32 triangleCount) {
 	Triangles = (IndexedTriangle16*)_aligned_realloc(Triangles, (NumTriangles + triangleCount + 8) * sizeof(IndexedTriangle16), 64); // Allocate 8 more, such that we can align without problems.
 }
 
+/*
 #define PushVertex(position, uv, normal, tangent, skin) \
 	if(Flags & EMeshCreationFlagsWithPositions) { *(vec3*)vertexPtr = position; vertexPtr += sizeof(vec3); } \
 	if(Flags & EMeshCreationFlagsWithUvs) { *(vec2*)vertexPtr = uv; vertexPtr += sizeof(vec3); } \
 	if(Flags & EMeshCreationFlagsWithNormals) { *(vec3*)vertexPtr = normal; vertexPtr += sizeof(vec3); } \
 	if(Flags & EMeshCreationFlagsWithTangents) { *(vec3*)vertexPtr = tangent; vertexPtr += sizeof(vec3); } \
 	if(Flags & EMeshCreationFlagsWithSkin) { *(SkinningWeights*)vertexPtr = skin; vertexPtr += sizeof(vec3); } \
-	++this->NumVertices
+	++NumVertices
+*/
+
+void CpuMesh::PushVertex(vec3 position, vec2 uv, vec3 normal, vec3 tangent, SkinningWeights skin) {
+	uint8* ptrVertex = Vertices + VertexSize * NumVertices;
+	if (Flags & EMeshCreationFlagsWithPositions) {
+		*reinterpret_cast<vec3*>(ptrVertex) = position;
+		ptrVertex += sizeof(vec3);
+	}
+	if (Flags & EMeshCreationFlagsWithUvs) {
+		*(vec2*)ptrVertex = uv;
+		ptrVertex += sizeof(vec3);
+	}
+	if (Flags & EMeshCreationFlagsWithNormals) {
+		*(vec3*)ptrVertex = normal;
+		ptrVertex += sizeof(vec3);
+	}
+	if (Flags & EMeshCreationFlagsWithTangents) {
+		*(vec3*)ptrVertex = tangent;
+		ptrVertex += sizeof(vec3);
+	}
+	if (Flags & EMeshCreationFlagsWithSkin) {
+		*(SkinningWeights*)ptrVertex = skin;
+		ptrVertex += sizeof(vec3);
+	}
+	++NumVertices;
+}
+
 
 void CpuMesh::PushTriangle(uint16 a, uint16 b, uint16 c) {
 	Triangles[NumTriangles++] = { a, b, c };
@@ -105,10 +133,10 @@ SubmeshInfo CpuMesh::PushQuad(vec2 radius) {
 	PushVertex(vec3(radius.x, -radius.y, 0.f), vec2(1.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 0.f), {});
 	PushVertex(vec3(-radius.x, radius.y, 0.f), vec2(0.f, 1.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 0.f), {});
 	PushVertex(vec3(radius.x, radius.y, 0.f), vec2(1.f, 1.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 0.f), {});
-
+	
 	PushTriangle(0, 1, 2);
 	PushTriangle(1, 3, 2);
-
+	
 	SubmeshInfo result;
 	result.FirstTriangle = firstTriangle;
 	result.NumTriangles = 2;
@@ -225,9 +253,9 @@ SubmeshInfo CpuMesh::PushSphere(uint16 slices, uint16 rows, float radius) {
 	float vertDeltaAngle = M_PI / (rows + 1);
 	float horzDeltaAngle = 2.f * M_PI / slices;
 
-	assert(slices * rows + 2, 2 * rows * slices);
+	assert(slices * rows + 2 <= UINT16_MAX);
 
-	uint8* vertexPtr = Vertices + VertexSize * NumVertices;
+	Reserve(slices * rows + 2, 2 * rows * slices);
 
 	// Vertices
 	PushVertex(vec3(0.f, -radius, 0.f), DirectionToPanoramaUv(vec3(0.f, -1.f, 0.f)), vec3(0.f, -1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
@@ -251,7 +279,7 @@ SubmeshInfo CpuMesh::PushSphere(uint16 slices, uint16 rows, float radius) {
 	PushVertex(vec3(0.f, radius, 0.f), DirectionToPanoramaUv(vec3(0.f, 1.f, 0.f)), vec3(0.f, 1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
 
 	uint16 lastVertex = slices * rows + 2;
-
+	
 	// Indices.
 	for (uint16 x = 0; x < slices - 1; x++) {
 		PushTriangle(0, x + 1u, x + 2u);
@@ -367,7 +395,7 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 	return result;
 }
 
-DxMesh CpuMesh::CreateDxMesh() {
+DxMesh CpuMesh::CreateDxMesh() const {
 	DxMesh result;
 	result.VertexBuffer = DxVertexBuffer::Create(VertexSize, NumVertices, Vertices);
 	result.IndexBuffer = DxIndexBuffer::Create(sizeof(uint16), NumTriangles * 3, Triangles);

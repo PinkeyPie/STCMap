@@ -21,20 +21,3 @@ static uint32 AtomicDecrement(volatile uint32& a) {
 static uint64 AtomicDecrement(volatile uint64& a) {
 	return InterlockedDecrement64((volatile LONG64*)&a) + 1;
 }
-
-struct ThreadMutex {
-	HANDLE Handle;
-
-	static ThreadMutex Create() {
-		ThreadMutex result = { CreateMutex(nullptr, FALSE, nullptr) };
-		return result;
-	}
-
-	bool Lock() {
-		return WaitForSingleObject(Handle, INFINITE) == WAIT_OBJECT_0;
-	}
-
-	bool Unlock() {
-		return ReleaseMutex(Handle);
-	}
-};

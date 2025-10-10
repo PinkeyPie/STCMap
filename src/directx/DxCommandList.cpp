@@ -1,6 +1,10 @@
 #include "DxCommandList.h"
 #include "DxRenderTarget.h"
 
+void DxCommandList::Barriers(CD3DX12_RESOURCE_BARRIER* barriers, uint32 numBarriers) {
+	CommandList->ResourceBarrier(numBarriers, barriers);
+}
+
 void DxCommandList::TransitionBarrier(DxTexture& texture, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to, uint32 subresource) {
 	TransitionBarrier(texture.Resource, from, to, subresource);
 }
@@ -171,8 +175,16 @@ void DxCommandList::SetVertexBuffer(uint32 slot, DxVertexBuffer& buffer) {
 	CommandList->IASetVertexBuffers(slot, 1, &buffer.View);
 }
 
+void DxCommandList::SetVertexBuffer(uint32 slot, D3D12_VERTEX_BUFFER_VIEW& buffer) {
+	CommandList->IASetVertexBuffers(slot, 1, &buffer);
+}
+
 void DxCommandList::SetIndexBuffer(DxIndexBuffer& buffer) {
 	CommandList->IASetIndexBuffer(&buffer.View);
+}
+
+void DxCommandList::SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW& buffer) {
+	CommandList->IASetIndexBuffer(&buffer);
 }
 
 void DxCommandList::SetViewport(const D3D12_VIEWPORT& viewport) {
@@ -188,7 +200,7 @@ void DxCommandList::SetScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uin
 }
 
 void DxCommandList::SetRenderTarget(DxRenderTarget& renderTarget, uint32 arraySlice) {
-	D3D12_CPU_DESCRIPTOR_HANDLE* dsv = (renderTarget.DepthStencilAttachment) ? &renderTarget.DsvHandle : nullptr;
+	D3D12_CPU_DESCRIPTOR_HANDLE* dsv = (renderTarget.DepthStencilFormat != DXGI_FORMAT_UNKNOWN) ? &renderTarget.DsvHandle : nullptr;
 	CommandList->OMSetRenderTargets(renderTarget.NumAttachments, renderTarget.RtvHandles, FALSE, dsv);
 }
 
@@ -216,8 +228,17 @@ void DxCommandList::SetBlendFactor(const float* blendFactor) {
 	CommandList->OMSetBlendFactor(blendFactor);
 }
 
+void DxCommandList::ResolveSubresource(DxResource dst, UINT dstSubresource, DxResource src, UINT srcSubresource, DXGI_FORMAT format) {
+	CommandList->ResolveSubresource(dst.Get(), dstSubresource, src.Get(), srcSubresource, format);
+}
+
 void DxCommandList::Draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance) {
 	CommandList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
+}
+
+void DxCommandList::DrawFullscreenTriangle() {
+	SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	Draw(3, 1, 0, 0);
 }
 
 void DxCommandList::DrawIndexed(uint32 indexCount, uint32 instanceCount, uint32 startIndex, int32 baseVertex, uint32 startInstance) {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mutex>
+
 #include "../pch.h"
 #include "dx.h"
 #include "DxCommandList.h"
@@ -46,7 +48,7 @@ public:
 	uint64 FrameId;
 	uint32 BufferedFrameId;
 
-	ThreadMutex AllocationMutex;
+	std::mutex AllocationMutex = {};
 	MemoryArena Arena;
 
 	ObjectRetirement ObjectRetirement;
@@ -54,8 +56,8 @@ public:
 	DxRtvDescriptorHeap RtvAllocator;
 	DxDsvDescriptorHeap DsvAllocator;
 
-	DxPagePool PagePools[NUM_BUFFERED_FRAMES];
-	DxFrameDescriptorAllocator FrameDescriptorAllocator;
+	DxPagePool PagePools[NUM_BUFFERED_FRAMES] = {};
+	DxFrameDescriptorAllocator FrameDescriptorAllocator = {};
 
 	volatile bool Running = true;
 

@@ -41,10 +41,6 @@ struct MemoryBlock {
 	uint8* Current;
 	uint64 Size;
 	MemoryBlock* Next;
-
-private:
-	uint64 GetRemainingSize();
-	friend class MemoryArena;
 };
 
 class MemoryArena {
@@ -55,8 +51,8 @@ public:
 
 	MemoryBlock* GetFreeBlock(uint64 size = 0);
 
-	MemoryBlock* CurrentBlock;
-	MemoryBlock* LastActiveBlock;
-	MemoryBlock* FreeBlocks;
-	uint64 MinimumBlockSize;
+	MemoryBlock* CurrentBlock = nullptr;
+	MemoryBlock* LastActiveBlock = nullptr;
+	MemoryBlock* FreeBlocks = nullptr;
+	uint64 MinimumBlockSize = 1;
 };

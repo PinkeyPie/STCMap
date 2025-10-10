@@ -19,6 +19,7 @@ public:
 	
 	PCTCH ClassName() const override;
 	LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
+	DXGI_FORMAT GetBackBufferFormat() const;
 
 	DxSwapChain SwapChain;
 	DxResource BackBuffers[NUM_BUFFERED_FRAMES];

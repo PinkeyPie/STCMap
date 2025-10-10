@@ -19,8 +19,9 @@ void DxCommandQueue::Initialize(DxDevice device, D3D12_COMMAND_LIST_TYPE type) {
 	ThrowIfFailed(device->CreateCommandQueue(&desc, IID_PPV_ARGS(CommandQueue.GetAddressOf())));
 	ThrowIfFailed(device->CreateFence(FenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(Fence.GetAddressOf())));
 
-	CommandListMutex = ThreadMutex::Create();
-	ProcessThreadHandle = CreateThread(nullptr, 0, ProcessRunningCommandAllocators, this, 0, nullptr);
+	ProcessThread = std::thread([&]() {
+		ProcessRunningCommandAllocators();
+	});
 
 	switch (type) {
 	case D3D12_COMMAND_LIST_TYPE_DIRECT:
@@ -31,6 +32,8 @@ void DxCommandQueue::Initialize(DxDevice device, D3D12_COMMAND_LIST_TYPE type) {
 		break;
 	case D3D12_COMMAND_LIST_TYPE_COPY:
 		SetName(CommandQueue, "Copy command queue");
+		break;
+	default:
 		break;
 	}
 }
@@ -47,7 +50,7 @@ bool DxCommandQueue::IsFenceComplete(uint64 fenceValue) {
 }
 
 void DxCommandQueue::WaitForFence(uint64 fenceValue) {
-	if (!IsFenceComplete(fenceValue)) {
+	if (not IsFenceComplete(fenceValue)) {
 		HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 		assert(fenceEvent, DWORD_MAX);
 
@@ -68,38 +71,32 @@ void DxCommandQueue::Flush() {
 	WaitForFence(Signal());
 }
 
-namespace {
-	DWORD ProcessRunningCommandAllocators(void* data) {
-		DxCommandQueue& queue = *(DxCommandQueue*)data;
-
-		while (DxContext::Instance().Running) {
-			while (true) {
-				queue.CommandListMutex.Lock();
-				DxCommandAllocator* allocator = queue.RunningCommandAllocators;
-				if (allocator) {
-					queue.RunningCommandAllocators = allocator->Next;
-				}
-				queue.CommandListMutex.Unlock();
-
-				if (allocator) {
-					queue.WaitForFence(allocator->LastExecutionFenceValue);
-					allocator->CommandAllocator.Reset();
-
-					queue.CommandListMutex.Lock();
-					allocator->Next = queue.FreeCommandAllocators;
-					queue.FreeCommandAllocators = allocator;
-					AtomicDecrement(queue.NumRunningCommandAllocators);
-					queue.CommandListMutex.Unlock();
-				}
-				else {
-					break;
-				}
+void DxCommandQueue::ProcessRunningCommandAllocators() {
+	DxContext& dxContext = DxContext::Instance();
+	while (dxContext.Running) {
+		while (true) {
+			CommandListMutex.lock();
+			DxCommandAllocator* allocator = RunningCommandAllocators;
+			if (allocator) {
+				RunningCommandAllocators = allocator->Next;
 			}
+			CommandListMutex.unlock();
 
-			SwitchToThread(); // Yield
+			if (allocator) {
+				WaitForFence(allocator->LastExecutionFenceValue);
+				allocator->CommandAllocator.Reset();
+
+				CommandListMutex.lock();
+				allocator->Next = FreeCommandAllocators;
+				FreeCommandAllocators = allocator;
+				AtomicDecrement(NumRunningCommandAllocators);
+				CommandListMutex.unlock();
+			}
+			else {
+				break;
+			}
 		}
 
-		return 0;
+		std::this_thread::yield();
 	}
 }
-

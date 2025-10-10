@@ -84,37 +84,18 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE dxgi d3d12 dxguid d3dcompiler runtimeobject assimp)
     target_include_directories(${PROJECT_NAME} PRIVATE ${shaders_dir}/common ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
     ${CMAKE_CURRENT_BINARY_DIR}/_deps/entt-src)
-
-    #[[add_custom_target(shaders)
-    set(HLSL_SHADER_FILES ${shaders_dir})
-
-    set_source_files_properties(src/shaders/color.hlsl PROPERTIES ShaderType "ps")
-    set_source_files_properties(${HLSL_SHADER_FILES} PROPERTIES ShaderModel "5_1")
-    foreach (FILE ${HLSL_SHADER_FILES})
-        get_filename_component(FILE_WE ${FILE} NAME_WE)
-        get_source_file_property(shadertype ${FILE} ShaderType)
-        get_source_file_property(shadermodel ${FILE} ShaderModel)
-        add_custom_command(TARGET shaders
-                COMMAND fxc.exe ${FILE} /nologo /E "PS" /T ${shadertype}_${shadermodel} /Zi /Fo "${CMAKE_BINARY_DIR}/${FILE_WE}.cso" /Fd "${CMAKE_BINARY_DIR}/${FILE_WE}.pdb"
-                MAIN_DEPENDENCY ${FILE}
-                COMMENT "HLSL ${FILWE}"
-                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders
-                VERBATIM
-        )
-    endforeach (FILE)
-    add_dependencies(${PROJECT_NAME} shaders)]]
 else ()
     add_executable(${PROJECT_NAME} ${src_files})
     target_compile_options(${PROJECT_NAME} INTERFACE -msse4.1)
 endif ()
 
-if(EXISTS ${PROJECT_SOURCE_DIR}/src/shaders)
+if(EXISTS ${PROJECT_SOURCE_DIR}/shaders/bin)
     if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/shaders)
         file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders)
     endif ()
-    file(GLOB dir RELATIVE ${PROJECT_SOURCE_DIR}/src/shaders ${PROJECT_SOURCE_DIR}/src/shaders/*.hlsl)
+    file(GLOB dir RELATIVE ${PROJECT_SOURCE_DIR}/shaders/bin ${PROJECT_SOURCE_DIR}/shaders/bin/*.cso)
     foreach (file ${dir})
-        file(COPY_FILE ${PROJECT_SOURCE_DIR}/src/shaders/${file} ${CMAKE_CURRENT_BINARY_DIR}/shaders/${file})
+        file(COPY_FILE ${PROJECT_SOURCE_DIR}/shaders/bin/${file} ${CMAKE_CURRENT_BINARY_DIR}/shaders/${file})
     endforeach ()
 endif ()
 

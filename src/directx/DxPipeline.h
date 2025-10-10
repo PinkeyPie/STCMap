@@ -1,6 +1,13 @@
 #pragma once
 
 #include "dx.h"
+#include "DxContext.h"
+
+#include <unordered_map>
+#include <set>
+#include <deque>
+#include <mutex>
+
 
 #define CREATE_GRAPHICS_PIPELINE DxGraphicsPipelineGenerator()
 #define CREATE_COMPUTE_PIPELINE DxComputePipelineGenerator()
@@ -19,7 +26,8 @@ public:
 		Desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 		Desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 		Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-		Desc.SampleDesc = { 1, 0 };
+		Desc.SampleDesc = {.Count = 1, .Quality = 0 };
+		Desc.SampleMask = 0xffffffff;
 	}
 
 	DxPipelineState Create() {
@@ -86,13 +94,18 @@ public:
 		return BlendState(renderTargetIndex, D3D12_BLEND_ONE, D3D12_BLEND_ONE, D3D12_BLEND_OP_ADD);
 	}
 
-	DxGraphicsPipelineGenerator& RasterizerWireframe() {
+	DxGraphicsPipelineGenerator& Wireframe() {
 		Desc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 		return *this;
 	}
 
 	DxGraphicsPipelineGenerator& CullFrontFaces() {
 		Desc.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
+		return *this;
+	}
+
+	DxGraphicsPipelineGenerator& CullingOff() {
+		Desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 		return *this;
 	}
 
@@ -186,4 +199,62 @@ public:
 		Desc.CS = CD3DX12_SHADER_BYTECODE(shader.Get());
 		return *this;
 	}
+};
+
+class DxPipeline {
+public:
+	DxPipelineState* Pipeline;
+	DxRootSignature* RootSignature;
+};
+
+struct GraphicsPipelineFiles {
+	std::string Rs;
+	std::string Vs;
+	std::string Ps;
+	std::string Ds;
+	std::string Hs;
+	std::string Gs;
+};
+
+class DxPipelineFactory {
+public:
+	DxPipelineFactory() = default;
+
+	static DxPipelineFactory* Instance() {
+		return _instance;
+	}
+
+	void CreateAllReloadablePipelines();
+	void CheckForChangedPipelines();
+	DxPipeline CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files,
+		DxRootSignature userRootSignature = nullptr);
+private:
+	struct ReloadablePipelineState {
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc;
+		GraphicsPipelineFiles Files;
+
+		DxPipelineState Pipeline;
+		DxRootSignature RootSignature;
+		bool UserRootSignature;
+
+		D3D12_INPUT_ELEMENT_DESC InputLayout[16];
+
+		ReloadablePipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files, DxRootSignature userRootSignature);
+	};
+
+	struct ShaderFile {
+		DxBlob Blob;
+		std::set<ReloadablePipelineState*> UsedByPipelines;
+	};
+
+	void PushBlob(const std::string& filename, ReloadablePipelineState* pipelineIndex);
+	void LoadPipeline(ReloadablePipelineState& p);
+	DWORD CheckForFileChanges();
+
+	static DxPipelineFactory* _instance;
+
+	std::unordered_map<std::string, ShaderFile> _shaderBlobs = {};
+	std::deque<ReloadablePipelineState> _pipelines = {};
+	std::vector<ReloadablePipelineState*> _dirtyPipelines = {};
+	std::mutex _mutex = {};
 };

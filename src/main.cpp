@@ -4,6 +4,7 @@
 #include "pch.h"
 #include "directx/dx.h"
 #include "directx/DxContext.h"
+#include "core/memory.h"
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR pCmdLine, int nCmdShow) {
 #ifdef _DEBUG

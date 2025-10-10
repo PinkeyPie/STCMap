@@ -1,0 +1,259 @@
+#include "../pch.h"
+#include "DxPipeline.h"
+#include "../core/threading.h"
+
+#include <unordered_map>
+#include <set>
+#include <deque>
+#include <filesystem>
+#include <iostream>
+#include <ppl.h>
+
+#include "DxRenderPrimitives.h"
+
+namespace fs = std::filesystem;
+
+static const wchar* shaderDir = L"shaders//";
+
+DxPipelineFactory* DxPipelineFactory::_instance = new DxPipelineFactory{};
+
+static std::wstring StringToWideString(const std::string& s) {
+	return std::wstring(s.begin(), s.end());
+}
+
+DxPipelineFactory::ReloadablePipelineState::ReloadablePipelineState(
+	const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc,
+	const GraphicsPipelineFiles& files, DxRootSignature userRootSignature) :
+	Desc(desc),
+	Files(files),
+	RootSignature(userRootSignature),
+	UserRootSignature(userRootSignature != nullptr) {
+	assert(desc.InputLayout.NumElements <= arraysize(InputLayout));
+
+	memcpy(InputLayout, desc.InputLayout.pInputElementDescs, sizeof(D3D12_INPUT_ELEMENT_DESC) * desc.InputLayout.NumElements);
+	Desc.InputLayout.pInputElementDescs = InputLayout;
+
+	if (desc.InputLayout.NumElements == 0) {
+		Desc.InputLayout.pInputElementDescs = nullptr;
+	}
+}
+
+void DxPipelineFactory::PushBlob(const std::string& filename, ReloadablePipelineState* pipelineIndex) {
+	if (!filename.empty()) {
+		auto it = _shaderBlobs.find(filename);
+		if (it == _shaderBlobs.end()) {
+			std::wstring filepath = shaderDir + StringToWideString(filename) + L".cso";
+
+			DxBlob blob;
+			ThrowIfFailed(D3DReadFileToBlob(filepath.c_str(), blob.GetAddressOf()));
+
+			_shaderBlobs[filename] = {.Blob = blob, .UsedByPipelines = {pipelineIndex} };
+		}
+		else {
+			it->second.UsedByPipelines.insert(pipelineIndex);
+		}
+	}
+}
+
+DxPipeline DxPipelineFactory::CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files, DxRootSignature userRootSignature) {
+	assert(!files.Rs.empty() ^ userRootSignature != nullptr);
+
+	_pipelines.emplace_back(desc, files, userRootSignature);
+	auto& state = _pipelines.back();
+
+	PushBlob(files.Rs, &state);
+	PushBlob(files.Vs, &state);
+	PushBlob(files.Ps, &state);
+	PushBlob(files.Gs, &state);
+	PushBlob(files.Gs, &state);
+	PushBlob(files.Ds, &state);
+	PushBlob(files.Hs, &state);
+
+	// What. The. Fuck.
+	// The root signature looses its internal pointer, If I take the pointer to the ComPtr
+	// Pipeline doesn't
+	auto p = state.Pipeline.Get();
+	auto r = state.RootSignature.Get();
+
+	DxPipeline result = { &state.Pipeline, &state.RootSignature };
+
+	state.Pipeline = p;
+	state.RootSignature = r;
+
+	return result;
+}
+
+void DxPipelineFactory::LoadPipeline(ReloadablePipelineState& p) {
+	DxContext& dxContext = DxContext::Instance();
+	if (!p.Files.Rs.empty()) {
+		DxBlob rs = _shaderBlobs[p.Files.Rs].Blob;
+		dxContext.RetireObject(p.RootSignature);
+		p.RootSignature = CreateRootSignature(rs);
+	}
+	if (!p.Files.Vs.empty()) {
+		DxBlob shader = _shaderBlobs[p.Files.Vs].Blob;
+		p.Desc.VS = CD3DX12_SHADER_BYTECODE(shader.Get());
+	}
+	if (!p.Files.Ps.empty()) {
+		DxBlob shader = _shaderBlobs[p.Files.Ps].Blob;
+		p.Desc.PS = CD3DX12_SHADER_BYTECODE(shader.Get());
+	}
+	if (!p.Files.Gs.empty()) {
+		DxBlob shader = _shaderBlobs[p.Files.Gs].Blob;
+		p.Desc.GS = CD3DX12_SHADER_BYTECODE(shader.Get());
+	}
+	if (!p.Files.Ds.empty()) {
+		DxBlob shader = _shaderBlobs[p.Files.Ds].Blob;
+		p.Desc.DS = CD3DX12_SHADER_BYTECODE(shader.Get());
+	}
+	if (!p.Files.Hs.empty()) {
+		DxBlob shader = _shaderBlobs[p.Files.Ds].Blob;
+		p.Desc.HS = CD3DX12_SHADER_BYTECODE(shader.Get());
+	}
+
+	p.Desc.pRootSignature = p.RootSignature.Get();
+	dxContext.RetireObject(p.Pipeline);
+	ThrowIfFailed(dxContext.Device->CreateGraphicsPipelineState(&p.Desc, IID_PPV_ARGS(p.Pipeline.GetAddressOf())));
+}
+
+void DxPipelineFactory::CreateAllReloadablePipelines() {
+	concurrency::parallel_for(0, (int)_pipelines.size(), [&](int i) {
+		LoadPipeline(_pipelines[i]);
+	});
+
+	std::thread fileWatcher([&]() {
+		this->CheckForFileChanges();
+	});
+	fileWatcher.detach();
+}
+
+void DxPipelineFactory::CheckForChangedPipelines() {
+	_mutex.lock();
+	concurrency::parallel_for(0, (int)_dirtyPipelines.size(), [&](int i) {
+		LoadPipeline(*_dirtyPipelines[i]);
+	});
+	_dirtyPipelines.clear();
+	_mutex.unlock();
+}
+
+
+static bool FileIsLocked(const wchar* filename) {
+	HANDLE fileHandle = CreateFileW(filename, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (filename == INVALID_HANDLE_VALUE) {
+		return true;
+	}
+	CloseHandle(fileHandle);
+	return false;
+}
+
+DWORD DxPipelineFactory::CheckForFileChanges() {
+	HANDLE directoryHandle;
+	OVERLAPPED overlapped;
+
+	uint8 buffer[1024] = {};
+
+	directoryHandle = CreateFileW(
+		shaderDir,
+		FILE_LIST_DIRECTORY,
+		FILE_SHARE_READ,
+		NULL,
+		OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+		NULL
+	);
+
+	if (directoryHandle == INVALID_HANDLE_VALUE) {
+		fprintf(stderr, "Monitor directory failed.\n");
+		return 1;
+	}
+
+	overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	ResetEvent(overlapped.hEvent);
+
+	DWORD eventName = FILE_NOTIFY_CHANGE_LAST_WRITE;
+
+	DWORD error = ReadDirectoryChangesW(directoryHandle,
+		buffer, sizeof(buffer), TRUE,
+		eventName,
+		NULL, &overlapped, NULL);
+
+	fs::path lastChangedPath = "";
+	fs::file_time_type lastChangedPathTimeStamp;
+
+	while (true) {
+		DWORD result = WaitForSingleObject(overlapped.hEvent, INFINITE);
+
+		DWORD dw;
+		if (not GetOverlappedResult(directoryHandle, &overlapped, &dw, FALSE) or dw == 0) {
+			fprintf(stderr, "Get overlapped result failed.\n");
+			return 1;
+		}
+
+		FILE_NOTIFY_INFORMATION* fileNotify;
+
+		DWORD offset = 0;
+
+		do {
+			fileNotify = (FILE_NOTIFY_INFORMATION*)(&buffer[offset]);
+
+			if (fileNotify->Action == FILE_ACTION_MODIFIED) {
+				char filename[MAX_PATH];
+				int ret = WideCharToMultiByte(CP_ACP, 0, fileNotify->FileName,
+					fileNotify->FileNameLength / sizeof(WCHAR),
+					filename, MAX_PATH, NULL, NULL);
+
+				filename[fileNotify->FileNameLength / sizeof(WCHAR)] = 0;
+
+				fs::path changedPath = (shaderDir / fs::path(filename)).lexically_normal();
+				auto changedPathWriteTime = fs::last_write_time(changedPath);
+
+				// The filesystem usually sends multiple notifications for changed files, since the file is first written, then metadata is changed etc.
+				// This check prevents these notifications if they are too close together in time.
+				// This is a pretty crude fix. In this setup files should not change at the same time, since we only ever track one file.
+				if (changedPath == lastChangedPath and
+					std::chrono::duration_cast<std::chrono::milliseconds>(changedPathWriteTime - lastChangedPathTimeStamp).count() < 200) {
+					lastChangedPath = changedPath;
+					lastChangedPathTimeStamp = changedPathWriteTime;
+					break;
+				}
+
+				bool isFile = not fs::is_directory(changedPath);
+
+				if (isFile) {
+					auto it = _shaderBlobs.find(changedPath.stem().string());
+					if (it != _shaderBlobs.end()) {
+						while (FileIsLocked(changedPath.wstring().c_str())) {}
+
+						std::cout << "Reloading shader blob " << changedPath << std::endl;
+						DxBlob blob;
+						ThrowIfFailed(D3DReadFileToBlob(changedPath.wstring().c_str(), blob.GetAddressOf()));
+
+						_mutex.lock();
+						it->second.Blob = blob;
+						_dirtyPipelines.insert(_dirtyPipelines.end(), it->second.UsedByPipelines.begin(), it->second.UsedByPipelines.end());
+						_mutex.unlock();
+					}
+
+					lastChangedPath = changedPath;
+					lastChangedPathTimeStamp = changedPathWriteTime;
+				}
+			}
+
+			offset += fileNotify->NextEntryOffset;
+		} while (fileNotify->NextEntryOffset != 0);
+
+		if (not ResetEvent(overlapped.hEvent)) {
+			fprintf(stderr, "Reset event failed.\n");
+		}
+
+		DWORD error = ReadDirectoryChangesW(directoryHandle,
+			buffer, sizeof(buffer), TRUE,
+			eventName, NULL, &overlapped, NULL);
+
+		if (error == 0) {
+			fprintf(stderr, "Read directory failed.\n");
+		}
+	}
+
+	return 0;
+}

@@ -44,12 +44,20 @@ DxDsvDescriptorHeap DxDsvDescriptorHeap::CreateDSVDescriptorAllocator(uint32 num
 	return descriptorHeap;
 }
 
+DxDescriptorHandle DxDescriptorRange::Create2DTextureSRV(DxTexture& texture, DxDescriptorHandle handle, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
+	return texture.Create2DTextureSRV(GetDevice(DescriptorHeap), handle, mipRange, overrideFormat);
+}
+
 DxDescriptorHandle DxDescriptorRange::Create2DTextureSRV(DxTexture& texture, uint32 index, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
 	return texture.Create2DTextureSRV(GetDevice(DescriptorHeap), GetHandle(index), mipRange, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::Push2DTextureSRV(DxTexture& texture, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
 	return Create2DTextureSRV(texture, PushIndex++, mipRange, overrideFormat);
+}
+
+DxDescriptorHandle DxDescriptorRange::CreateCubemapSRV(DxTexture& texture, DxDescriptorHandle handle, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
+	return texture.CreateCubemapSRV(GetDevice(DescriptorHeap), handle, mipRange, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateCubemapSRV(DxTexture& texture, uint32 index, TextureMipRange mipRange, uint32 firstCube, uint32 numCubes, DXGI_FORMAT overrideFormat) {
@@ -60,12 +68,20 @@ DxDescriptorHandle DxDescriptorRange::PushCubemapSRV(DxTexture& texture, Texture
 	return CreateCubemapSRV(texture, PushIndex++, mipRange, overrideFormat);
 }
 
+DxDescriptorHandle DxDescriptorRange::CreateCubemapArraySRV(DxTexture& texture, DxDescriptorHandle handle, TextureMipRange mipRange, uint32 firstCube, uint32 numCubes, DXGI_FORMAT overrideFormat) {
+	return 	texture.CreateCubemapArraySRV(GetDevice(DescriptorHeap), handle, mipRange, firstCube, numCubes, overrideFormat);
+}
+
 DxDescriptorHandle DxDescriptorRange::CreateCubemapArraySRV(DxTexture& texture, uint32 index, TextureMipRange mipRange, uint32 firstCube, uint32 numCubes, DXGI_FORMAT overrideFormat) {
 	return texture.CreateCubemapArraySRV(GetDevice(DescriptorHeap), GetHandle(index), mipRange, firstCube, numCubes, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::PushCubemapArraySRV(DxTexture& texture, TextureMipRange mipRange, uint32 firstCube, uint32 numCubes, DXGI_FORMAT overrideFormat) {
 	return CreateCubemapArraySRV(texture, PushIndex++, mipRange, firstCube, numCubes, overrideFormat);
+}
+
+DxDescriptorHandle DxDescriptorRange::CreateDepthTextureSRV(DxTexture& texture, DxDescriptorHandle handle) {
+	return texture.CreateDepthTextureSRV(GetDevice(DescriptorHeap), handle);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateDepthTextureSRV(DxTexture& texture, uint32 index) {
@@ -76,12 +92,20 @@ DxDescriptorHandle DxDescriptorRange::PushDepthTextureSRV(DxTexture& texture) {
 	return CreateDepthTextureSRV(texture, PushIndex++);
 }
 
+DxDescriptorHandle DxDescriptorRange::CreateNullTextureSRV(DxDescriptorHandle handle) {
+	return DxTexture::CreateNullSRV(GetDevice(DescriptorHeap), handle);
+}
+
 DxDescriptorHandle DxDescriptorRange::CreateNullTextureSRV(uint32 index) {
 	return DxTexture::CreateNullSRV(GetDevice(DescriptorHeap), GetHandle(index));
 }
 
 DxDescriptorHandle DxDescriptorRange::PushNullTextureSRV() {
 	return CreateNullTextureSRV(PushIndex++);
+}
+
+DxDescriptorHandle DxDescriptorRange::CreateBufferSRV(DxBuffer& buffer, DxDescriptorHandle handle, BufferRange bufferRange) {
+	return buffer.CreateSRV(GetDevice(DescriptorHeap), handle, bufferRange);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateBufferSRV(DxBuffer& buffer, uint32 index, BufferRange bufferRange) {
@@ -92,12 +116,20 @@ DxDescriptorHandle DxDescriptorRange::PushBufferSRV(DxBuffer& buffer, BufferRang
 	return CreateBufferSRV(buffer, PushIndex++, bufferRange);
 }
 
+DxDescriptorHandle DxDescriptorRange::CreateRawBufferSRV(DxBuffer& buffer, DxDescriptorHandle handle, BufferRange bufferRange) {
+	return buffer.CreateRawSRV(GetDevice(DescriptorHeap), handle, bufferRange);
+}
+
 DxDescriptorHandle DxDescriptorRange::CreateRawBufferSRV(DxBuffer& buffer, uint32 index, BufferRange bufferRange) {
 	return buffer.CreateRawSRV(GetDevice(DescriptorHeap), GetHandle(index), bufferRange);
 }
 
 DxDescriptorHandle DxDescriptorRange::PushRawBufferSRV(DxBuffer& buffer, BufferRange bufferRange) {
 	return CreateRawBufferSRV(buffer, PushIndex++, bufferRange);
+}
+
+DxDescriptorHandle DxDescriptorRange::Create2DTextureUAV(DxTexture& texture, DxDescriptorHandle handle, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
+	return texture.Create2DTextureUAV(GetDevice(DescriptorHeap), handle, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::Create2DTextureUAV(DxTexture& texture, uint32 index, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
@@ -108,12 +140,20 @@ DxDescriptorHandle DxDescriptorRange::Push2DTextureUAV(DxTexture& texture, uint3
 	return Create2DTextureUAV(texture, PushIndex++, mipSlice, overrideFormat);
 }
 
+DxDescriptorHandle DxDescriptorRange::Create2DTextureArrayUAV(DxTexture& texture, DxDescriptorHandle handle, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
+	return texture.Create2DTextureArrayUAV(GetDevice(DescriptorHeap), handle, mipSlice, overrideFormat);
+}
+
 DxDescriptorHandle DxDescriptorRange::Create2DTextureArrayUAV(DxTexture& texture, uint32 index, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
 	return texture.Create2DTextureArrayUAV(GetDevice(DescriptorHeap), GetHandle(index), mipSlice, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::Push2DTextureArrayUAV(DxTexture& texture, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
 	return Create2DTextureArrayUAV(texture, PushIndex++, mipSlice, overrideFormat);
+}
+
+DxDescriptorHandle DxDescriptorRange::CreateNullTextureUAV(DxDescriptorHandle handle) {
+	return DxTexture::CreateNullSRV(GetDevice(DescriptorHeap), handle);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateNullTextureUAV(uint32 index) {
@@ -124,12 +164,20 @@ DxDescriptorHandle DxDescriptorRange::PushNullTextureUAV() {
 	return CreateNullTextureUAV(PushIndex++);
 }
 
+DxDescriptorHandle DxDescriptorRange::CreateBufferUAV(DxBuffer& buffer, DxDescriptorHandle handle, BufferRange bufferRange) {
+	return buffer.CreateUAV(GetDevice(DescriptorHeap), handle, bufferRange);
+}
+
 DxDescriptorHandle DxDescriptorRange::CreateBufferUAV(DxBuffer& buffer, uint32 index, BufferRange bufferRange) {
 	return buffer.CreateUAV(GetDevice(DescriptorHeap), GetHandle(index), bufferRange);
 }
 
 DxDescriptorHandle DxDescriptorRange::PushBufferUAV(DxBuffer& buffer, BufferRange bufferRange) {
 	return CreateBufferUAV(buffer, PushIndex++, bufferRange);
+}
+
+DxDescriptorHandle DxDescriptorRange::CreateRaytracingAccelerationStructureSRV(DxBuffer& tlas, DxDescriptorHandle handle) {
+	return tlas.CreateRaytracingAccelerationStructureSRV(GetDevice(DescriptorHeap), handle);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateRaytracingAccelerationStructureSRV(DxBuffer& tlas, uint32 index) {
@@ -209,16 +257,8 @@ DxDescriptorHandle DxDsvDescriptorHeap::CreateDepthStencilView(DxTexture* textur
 	return index;
 }
 
-DxFrameDescriptorAllocator DxFrameDescriptorAllocator::Create() {
-	DxFrameDescriptorAllocator result = {};
-	result.Device = DxContext::Instance().Device;
-	result.Mutex = ThreadMutex::Create();
-	result.CurrentFrame = NUM_BUFFERED_FRAMES - 1;
-	return result;
-}
-
 void DxFrameDescriptorAllocator::NewFrame(uint32 bufferedFrameId) {
-	Mutex.Lock();
+	Mutex.lock();
 
 	CurrentFrame = bufferedFrameId;
 
@@ -229,11 +269,11 @@ void DxFrameDescriptorAllocator::NewFrame(uint32 bufferedFrameId) {
 		FreePages = page;
 	}
 
-	Mutex.Unlock();
+	Mutex.unlock();
 }
 
 DxDescriptorRange DxFrameDescriptorAllocator::AllocateContiguousDescriptorRange(uint32 count) {
-	Mutex.Lock();
+	Mutex.lock();
 
 	DxDescriptorPage* current = UsedPages[CurrentFrame];
 	if (!current or (current->MaxNumDescriptors - current->UsedDescriptors < count)) {
@@ -262,7 +302,7 @@ DxDescriptorRange DxFrameDescriptorAllocator::AllocateContiguousDescriptorRange(
 	uint32 index = current->UsedDescriptors;
 	current->UsedDescriptors += count;
 
-	Mutex.Unlock();
+	Mutex.unlock();
 
 	DxDescriptorRange result;
 

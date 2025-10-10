@@ -1,6 +1,12 @@
 #include "memory.h"
 #include <algorithm>
 
+#ifdef _MSC_VER
+struct Struct {
+	
+};
+#endif
+
 namespace {
 	MemoryBlock* AllocateMemoryBlock(uint64 size) {
 		uint64 blockSize = AlignTo(sizeof(MemoryBlock), 64);
@@ -42,12 +48,8 @@ MemoryBlock* MemoryArena::GetFreeBlock(uint64 size) {
 	return result;
 }
 
-uint64 MemoryBlock::GetRemainingSize() {
-	return Size - (uint64)(Current - Size);
-}
-
 void* MemoryArena::Allocate(uint64 size, bool clearToZero) {
-	if (!CurrentBlock or CurrentBlock->GetRemainingSize() < size) {
+	if (!CurrentBlock or CurrentBlock->Size < size) {
 		MemoryBlock* block = GetFreeBlock(size);
 		block->Next = CurrentBlock;
 
@@ -60,6 +62,7 @@ void* MemoryArena::Allocate(uint64 size, bool clearToZero) {
 
 	void* result = CurrentBlock->Current;
 	CurrentBlock->Current += size;
+	CurrentBlock->Size -= size;
 
 	if (clearToZero) {
 		memset(result, 0, size);
@@ -69,13 +72,12 @@ void* MemoryArena::Allocate(uint64 size, bool clearToZero) {
 }
 
 void MemoryArena::Reset() {
-	Reset();
-	for (MemoryBlock* block = FreeBlocks; block; ) {
-		MemoryBlock* next = block->Next;
-		_aligned_free(block);
-		block = next;
+	if (LastActiveBlock) {
+		LastActiveBlock->Next = FreeBlocks;
 	}
-	*this = {};
+	FreeBlocks = CurrentBlock;
+	CurrentBlock = nullptr;
+	LastActiveBlock = nullptr;
 }
 
 void MemoryArena::Free() {

@@ -1,7 +1,9 @@
 #include "Application.h"
 
+#include "directx/BarrierBatcher.h"
 #include "directx/DxCommandList.h"
 #include "directx/DxContext.h"
+#include "directx/DxRenderer.h"
 
 Application* Application::_instance = new Application{};
 
@@ -233,6 +235,7 @@ bool Application::HandleWindowsMessages() {
 }
 
 uint64 Application::RenderToWindow(float* clearColor) {
+	DxResource frameResult = DxRenderer::Instance()->RenderTarget.ColorAttachments[0];
 	DxResource backBuffer = _mainWindow.BackBuffers[_mainWindow.CurrentBackBufferIndex];
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(_mainWindow.RtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), _mainWindow.CurrentBackBufferIndex, _mainWindow.RtvDescriptorSize);
 
@@ -240,17 +243,16 @@ uint64 Application::RenderToWindow(float* clearColor) {
 
 	CD3DX12_RECT scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 	CD3DX12_VIEWPORT viewport = CD3DX12_VIEWPORT(0.f, 0.f, (float)_mainWindow.ClientWidth, (float)_mainWindow.ClientHeight);
-
+	
 	cl->SetScissor(scissorRect);
 	cl->SetViewport(viewport);
 
-	cl->TransitionBarrier(backBuffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-	cl->ClearRTV(rtv, clearColor);
-	cl->SetScreenRenderTarget(&rtv, 1, nullptr);
-
-	cl->TransitionBarrier(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-
+	BarrierBatcher(cl).Transition(backBuffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RESOLVE_DEST)
+				      .Transition(frameResult, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+	cl->ResolveSubresource(backBuffer, 0, frameResult, 0, _mainWindow.GetBackBufferFormat());
+	BarrierBatcher(cl).Transition(frameResult, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
+				      .Transition(backBuffer, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_PRESENT);
+	
 	uint64 result = DxContext::Instance().ExecuteCommandList(cl);
 
 	_mainWindow.SwapBuffers();
@@ -262,12 +264,19 @@ bool Application::Initialize() {
 	SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 	AddVectoredExceptionHandler(TRUE, HandleVectoredException);
 
+	constexpr uint32 initialWidth = 1280;
+	constexpr uint32 initialHeight = 800;
+
+	DxRenderer* renderer = DxRenderer::Instance();
+	renderer->Initialize(initialWidth, initialHeight);
+
 	_mainWindow.ColorDepth = EColorDepth8;
 	_mainWindow.DepthFormat = DXGI_FORMAT_UNKNOWN;
-	if (not _mainWindow.Initialize(TEXT("Main Window"), 1280, 800)) {
+	if (not _mainWindow.Initialize(TEXT("Main Window"), initialWidth, initialHeight)) {
 		return false;
 	}
 	NumOpenWindows++;
+
 
 	_timer.Reset();
 	return true;
@@ -282,14 +291,22 @@ void Application::Run() {
 
 	fenceValues[NUM_BUFFERED_FRAMES - 1] = dxContext.RenderQueue.Signal();
 
+	DxRenderer* renderer = DxRenderer::Instance();
 	while (NewFrame()) {
 		dxContext.RenderQueue.WaitForFence(fenceValues[_mainWindow.CurrentBackBufferIndex]);
 		dxContext.NewFrame(frameId);
 
+		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(_mainWindow.RtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), _mainWindow.CurrentBackBufferIndex, _mainWindow.RtvDescriptorSize);
+		DxResource backBuffer = _mainWindow.BackBuffers[_mainWindow.CurrentBackBufferIndex];
+
+		renderer->BeginFrame(rtv, backBuffer);
+		fenceValues[_mainWindow.CurrentBackBufferIndex] = renderer->DummyRender();
+
 		float clearColor1[] = { 1.f, 0.f, 0.f, 1.f };
 
-		fenceValues[_mainWindow.CurrentBackBufferIndex] = RenderToWindow(clearColor1);
+		// fenceValues[_mainWindow.CurrentBackBufferIndex] = RenderToWindow(clearColor1);
 
+		_mainWindow.SwapBuffers();
 		++frameId;
 	}
 

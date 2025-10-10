@@ -36,6 +36,8 @@ public:
 	ID3D12DescriptorHeap* DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
 
 	// Barriers
+	void Barriers(CD3DX12_RESOURCE_BARRIER* barriers, uint32 numBarriers);
+
 	void TransitionBarrier(DxTexture& texture, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to, uint32 subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	void TransitionBarrier(DxBuffer& buffer, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to, uint32 subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 	void TransitionBarrier(DxResource resource, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to, uint32 subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
@@ -116,12 +118,14 @@ public:
 	void ClearDepthAndStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float depth = 1.f, uint32 stencil = 0);
 	void SetStencilReference(uint32 stencilReference);
 	void SetBlendFactor(const float* blendFactor);
+	void ResolveSubresource(DxResource dst, UINT dstSubresource, DxResource src, UINT srcSubresource, DXGI_FORMAT format);
 
 	// Draw.
 	void Draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance);
 	void DrawIndexed(uint32 indexCount, uint32 instanceCount, uint32 startIndex, int32 baseVertex, uint32 startInstance);
 	void DrawIndirect(DxCommandSignature commandSignature, uint32 numDraws, DxBuffer commandBuffer);
 	void DrawIndirect(DxCommandSignature commandSignature, uint32 maxNumDraws, DxBuffer numDrawsBuffer, DxBuffer commandBuffer);
+	void DrawFullscreenTriangle();
 
 	// Dispatch.
 	void Dispatch(uint32 numGroupsX, uint32 numGroupsY = 1, uint32 numGroupsZ = 1);

@@ -22,15 +22,15 @@ public:
 	CpuMesh(CpuMesh&& mesh);
 	~CpuMesh();
 
-	uint32 Flags;
-	uint32 VertexSize;
-	uint32 SkinOffset;
+	uint32 Flags = 0;
+	uint32 VertexSize = 0;
+	uint32 SkinOffset = 0;
 
-	uint8* Vertices;
-	IndexedTriangle16* Triangles;
+	uint8* Vertices = nullptr;
+	IndexedTriangle16* Triangles = nullptr;
 
-	uint32 NumVertices;
-	uint32 NumTriangles;
+	uint32 NumVertices = 0;
+	uint32 NumTriangles = 0;
 
 	SubmeshInfo PushQuad(vec2 radius);
 	SubmeshInfo PushQuad(float radius) {
@@ -43,11 +43,12 @@ public:
 	SubmeshInfo PushSphere(uint16 slices, uint16 rows, float radius);
 	SubmeshInfo PushCapsule(uint16 slices, uint16 rows, float height, float radius);
 
-	DxMesh CreateDxMesh();
+	DxMesh CreateDxMesh() const;
 	DxVertexBuffer CreateVertexBufferWithAlternativeLayout(DxContext* context, uint32 otherFlags, bool allowUnorderedAccess = false);
 
 private:
 	void AlignNextTriangle();
 	void Reserve(uint32 vertexCount, uint32 triangleCount);
 	void PushTriangle(uint16 a, uint16 b, uint16 c);
+	void PushVertex(vec3 position, vec2 uv, vec3 normal, vec3 tangent, SkinningWeights skin);
 };

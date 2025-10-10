@@ -1,7 +1,8 @@
 #pragma once
 
+#include "../pch.h"
 #include "dx.h"
-#include "../core/threading.h"
+#include "mutex"
 
 class DxCommandList;
 class DxCommandAllocator;
@@ -26,7 +27,10 @@ public:
 	volatile uint32 NumRunningCommandAllocators;
 
 	DxCommandList* FreeCommandLists;
-	HANDLE ProcessThreadHandle;
 
-	ThreadMutex CommandListMutex;
+	std::thread ProcessThread;
+	std::mutex CommandListMutex = {};
+
+private:
+	void ProcessRunningCommandAllocators();
 };

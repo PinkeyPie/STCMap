@@ -66,6 +66,13 @@ void DirectWindow::CreateSwapchain(const DxCommandQueue& commandQueue) {
 	ThrowIfFailed(swapChain1.As(&SwapChain));
 }
 
+DXGI_FORMAT DirectWindow::GetBackBufferFormat() const {
+	if (ColorDepth == EColorDepth8) {
+		return DXGI_FORMAT_R8G8B8A8_UNORM;
+	}
+	return DXGI_FORMAT_R10G10B10A2_UNORM;
+}
+
 void DirectWindow::CheckForHdrSupport() {
 	DxFactory factory = DxContext::Instance().Factory;
 	RECT windowRect = { 0, 0, (LONG)ClientWidth, (LONG)ClientHeight };

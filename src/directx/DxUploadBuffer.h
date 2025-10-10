@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mutex>
+
 #include "dx.h"
 #include "../pch.h"
 #include "../core/memory.h"
@@ -23,21 +25,21 @@ struct DxPage {
 
 class DxPagePool {
 public:
+	DxPagePool() = default;
+
 	MemoryArena Arena;
 	DxDevice Device;
 
-	ThreadMutex Mutex;
+	std::mutex Mutex = {};
 
-	uint64 PageSize;
-	DxPage* FreePages;
-	DxPage* UsedPages;
-	DxPage* LastUsedPage;
+	uint64 PageSize = 0;
+	DxPage* FreePages = nullptr;
+	DxPage* UsedPages = nullptr;
+	DxPage* LastUsedPage = nullptr;
 
 	DxPage* GetFreePage();
 	void ReturnPage(DxPage* page);
 	void Reset();
-
-	static DxPagePool Create(DxDevice device, uint64 pageSize);
 
 private:
 	DxPage* AllocateNewPage();

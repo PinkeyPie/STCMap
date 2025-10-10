@@ -2,9 +2,9 @@
 #include "../core/memory.h"
 
 DxPage* DxPagePool::AllocateNewPage() {
-	Mutex.Lock();
-	auto result = (DxPage*)Arena.Allocate(sizeof(DxPage), true);
-	Mutex.Unlock();
+	Mutex.lock();
+	auto result = static_cast<DxPage*>(Arena.Allocate(sizeof(DxPage), true));
+	Mutex.unlock();
 
 	auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(PageSize);
 
@@ -27,12 +27,12 @@ DxPage* DxPagePool::AllocateNewPage() {
 }
 
 DxPage* DxPagePool::GetFreePage() {
-	Mutex.Lock();
+	Mutex.lock();
 	DxPage* result = FreePages;
 	if (result) {
 		FreePages = result->Next;
 	}
-	Mutex.Unlock();
+	Mutex.unlock();
 
 	if (not result) {
 		result = AllocateNewPage();
@@ -44,13 +44,13 @@ DxPage* DxPagePool::GetFreePage() {
 }
 
 void DxPagePool::ReturnPage(DxPage* page) {
-	Mutex.Lock();
+	Mutex.lock();
 	page->Next = UsedPages;
 	UsedPages = page;
 	if (!LastUsedPage) {
 		LastUsedPage = page;
 	}
-	Mutex.Unlock();
+	Mutex.unlock();
 }
 
 void DxPagePool::Reset() {
@@ -92,12 +92,4 @@ void DxUploadBuffer::Reset() {
 		PagePool->ReturnPage(CurrentPage);
 	}
 	CurrentPage = nullptr;
-}
-
-DxPagePool DxPagePool::Create(DxDevice device, uint64 pageSize) {
-	DxPagePool pool = {};
-	pool.Device = device;
-	pool.Mutex = ThreadMutex::Create();
-	pool.PageSize = pageSize;
-	return pool;
 }
