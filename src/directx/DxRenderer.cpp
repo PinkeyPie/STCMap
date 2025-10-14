@@ -39,21 +39,21 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 	DxPipelineFactory* pipelineFactory = DxPipelineFactory::Instance();
 
 	{
-		auto desc = CREATE_GRAPHICS_PIPELINE.RenderTargets(RenderTarget.RenderTargetFormat).DepthSettings(false, false).CullingOff();
+		auto desc = CREATE_GRAPHICS_PIPELINE
+		.RenderTargets(RenderTarget.RenderTargetFormat)
+		.DepthSettings(false, false)
+		.CullingOff();
 
-		_presentPipeline = pipelineFactory->CreateReloadablePipeline(desc, { "present_ps", "fullscreen_triangle_vs", "present_ps" });
+		_presentPipeline = pipelineFactory->CreateReloadablePipeline(desc, { "fullscreen_triangle_vs", "present_ps" }, "present_ps");
 	}
 
 	{
-		D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
-			{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORDS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
+		auto desc = CREATE_GRAPHICS_PIPELINE
+		.InputLayout(inputLayoutPositionUvNormal)
+		.RasterizeCounterClockwise()
+		.RenderTargets(RenderTarget.RenderTargetFormat, RenderTarget.DepthStencilFormat);
 
-		auto desc = CREATE_GRAPHICS_PIPELINE.InputLayout(inputLayout, std::size(inputLayout)).RasterizeCounterClockwise().RenderTargets(RenderTarget.RenderTargetFormat, RenderTarget.DepthStencilFormat);
-
-		_modelPipeline = pipelineFactory->CreateReloadablePipeline(desc, { "model_vs", "model_vs", "model_ps" });
+		_modelPipeline = pipelineFactory->CreateReloadablePipeline(desc, { "model_vs", "model_ps" }, "model_vs");
 	}
 
 	pipelineFactory->CreateAllReloadablePipelines();
@@ -83,10 +83,13 @@ void DxRenderer::BeginFrame(uint32 width, uint32 height) {
 void DxRenderer::BeginFrame(CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle, DxResource renderTarget) {
 	CurrentBackBuffer = renderTarget;
 	BackBufferRtv = rtvHandle;
-	CD3DX12_RESOURCE_DESC desc(CurrentBackBuffer->GetDesc());
-	if (desc.Width != RenderWidth or desc.Height != RenderHeight) {
-		RenderHeight = desc.Height;
-		RenderWidth = desc.Width;
+	uint32 width = renderTarget->GetDesc().Width;
+	uint32 height = renderTarget->GetDesc().Height;
+	if (width != RenderWidth or height != RenderHeight) {
+		RenderHeight = height;
+		RenderWidth = width;
+
+		DepthBuffer.Resize(width, height);
 	}
 
 	DxPipelineFactory::Instance()->CheckForChangedPipelines();
@@ -100,7 +103,7 @@ int DxRenderer::DummyRender() {
 	DxContext& dxContext = DxContext::Instance();
 	DxCommandList* cl = dxContext.GetFreeRenderCommandList();
 
-	CD3DX12_RECT scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+	CD3DX12_RECT scissorRect = CD3DX12_RECT(0, 0, RenderWidth, RenderHeight);
 
 	cl->SetScissor(scissorRect);
 	cl->SetViewport(_viewport);
@@ -125,6 +128,7 @@ int DxRenderer::DummyRender() {
 	cl->DrawIndexed(_submesh.NumTriangles * 3, 1, _submesh.FirstTriangle * 3, _submesh.BaseVertex, 0);
 
 	BarrierBatcher(cl).Transition(CurrentBackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
+	CurrentBackBuffer.Reset();
 
 	return dxContext.ExecuteCommandList(cl);
 }

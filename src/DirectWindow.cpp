@@ -24,7 +24,7 @@ void DirectWindow::CheckTearingSupport() {
 		}
 	}
 
-	TearingSupported = allowTearing == TRUE;
+	_tearingSupported = allowTearing == TRUE;
 }
 
 void DirectWindow::CreateSwapchain(const DxCommandQueue& commandQueue) {
@@ -33,11 +33,11 @@ void DirectWindow::CreateSwapchain(const DxCommandQueue& commandQueue) {
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
 	swapChainDesc.Width = ClientWidth;
 	swapChainDesc.Height = ClientHeight;
-	if (ColorDepth == EColorDepth8) {
+	if (_colorDepth == EColorDepth8) {
 		swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	}
 	else {
-		assert(ColorDepth == EColorDepth10);
+		assert(_colorDepth == EColorDepth10);
 		swapChainDesc.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
 	}
 	swapChainDesc.Stereo = FALSE;
@@ -49,7 +49,7 @@ void DirectWindow::CreateSwapchain(const DxCommandQueue& commandQueue) {
 	swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 
 	// It is recommended to always allow tearing if tearing support is available
-	swapChainDesc.Flags = TearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+	swapChainDesc.Flags = _tearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
 	Com<IDXGISwapChain1> swapChain1;
 	ThrowIfFailed(factory->CreateSwapChainForHwnd(
@@ -63,11 +63,11 @@ void DirectWindow::CreateSwapchain(const DxCommandQueue& commandQueue) {
 
 	ThrowIfFailed(factory->MakeWindowAssociation(hwnd, NULL));
 
-	ThrowIfFailed(swapChain1.As(&SwapChain));
+	ThrowIfFailed(swapChain1.As(&_swapChain));
 }
 
 DXGI_FORMAT DirectWindow::GetBackBufferFormat() const {
-	if (ColorDepth == EColorDepth8) {
+	if (_colorDepth == EColorDepth8) {
 		return DXGI_FORMAT_R8G8B8A8_UNORM;
 	}
 	return DXGI_FORMAT_R10G10B10A2_UNORM;
@@ -78,8 +78,8 @@ void DirectWindow::CheckForHdrSupport() {
 	RECT windowRect = { 0, 0, (LONG)ClientWidth, (LONG)ClientHeight };
 	GetWindowRect(hwnd, &windowRect);
 
-	if (ColorDepth == EColorDepth8) {
-		HdrSupport = false;
+	if (_colorDepth == EColorDepth8) {
+		_hdrSupport = false;
 		return;
 	}
 
@@ -123,21 +123,21 @@ void DirectWindow::CheckForHdrSupport() {
 	DXGI_OUTPUT_DESC1 desc1;
 	ThrowIfFailed(output6->GetDesc1(&desc1));
 
-	HdrSupport = desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+	_hdrSupport = desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
 }
 
-void DirectWindow::SetSwapChainColorSpace() {
+void DirectWindow::SetSwapChainColorSpace() const {
 	// Rec2020 is the standard for UHD displays. The tonemap shader needs to apply the ST2084 curve before display.
 	// Rec709 is the same as sRGB, just without the gamma curve. The tonemap shader needs to apply the gamma curve before display.
-	DXGI_COLOR_SPACE_TYPE colorSpace = HdrSupport and ColorDepth == EColorDepth10 ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+	DXGI_COLOR_SPACE_TYPE colorSpace = _hdrSupport and _colorDepth == EColorDepth10 ? DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 : DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
 	UINT colorSpaceSupport = 0;
-	if (SUCCEEDED(SwapChain->CheckColorSpaceSupport(colorSpace, &colorSpaceSupport)) and
+	if (SUCCEEDED(_swapChain->CheckColorSpaceSupport(colorSpace, &colorSpaceSupport)) and
 		(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) == DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) {
-		ThrowIfFailed(SwapChain->SetColorSpace1(colorSpace));
+		ThrowIfFailed(_swapChain->SetColorSpace1(colorSpace));
 	}
 
-	if (not HdrSupport) {
-		ThrowIfFailed(SwapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
+	if (not _hdrSupport) {
+		ThrowIfFailed(_swapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE, 0, nullptr));
 		return;
 	}
 
@@ -175,30 +175,29 @@ void DirectWindow::SetSwapChainColorSpace() {
 	hdr10MetaData.MaxContentLightLevel = (uint16)(maxCLL);
 	hdr10MetaData.MaxFrameAverageLightLevel = (uint16)(maxFALL);
 
-	ThrowIfFailed(SwapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10, sizeof(DXGI_HDR_METADATA_HDR10), &hdr10MetaData));
+	ThrowIfFailed(_swapChain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10, sizeof(DXGI_HDR_METADATA_HDR10), &hdr10MetaData));
 }
 
 void DirectWindow::UpdateRenderTargetView() {
 	DxDevice device = DxContext::Instance().Device;
-	uint32 rtvDescriptorSize = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(RtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(_rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
 	for (int i = 0; i < NUM_BUFFERED_FRAMES; i++) {
 		DxResource backBuffer;
-		ThrowIfFailed(SwapChain->GetBuffer(i, IID_PPV_ARGS(backBuffer.GetAddressOf())));
+		ThrowIfFailed(_swapChain->GetBuffer(i, IID_PPV_ARGS(backBuffer.GetAddressOf())));
 
 		device->CreateRenderTargetView(backBuffer.Get(), nullptr, rtvHandle);
 
-		BackBuffers[i] = backBuffer;
+		_backBuffers[i] = backBuffer;
 
-		SetName(BackBuffers[i], "BackBuffer");
+		SetName(_backBuffers[i], "BackBuffer");
 
-		rtvHandle.Offset(RtvDescriptorSize);
+		rtvHandle.Offset(_rtvDescriptorSize);
 	}
 }
 
-bool DirectWindow::Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight) {
+bool DirectWindow::Initialize(const TCHAR* name, int initialWidth, int initialHeight) {
 	bool result = BaseWindow::Initialize(name, initialWidth, initialHeight);
 	if (!result) {
 		return false;
@@ -208,57 +207,57 @@ bool DirectWindow::Initialize(const TCHAR* name, uint32 initialWidth, uint32 ini
 	CheckTearingSupport();
 
 	CreateSwapchain(dxContext.RenderQueue);
-	CurrentBackBufferIndex = SwapChain->GetCurrentBackBufferIndex();
+	_currentBackBufferIndex = _swapChain->GetCurrentBackBufferIndex();
 
 	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
 	descriptorHeapDesc.NumDescriptors = NUM_BUFFERED_FRAMES;
 	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 
-	ThrowIfFailed(dxContext.Device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(RtvDescriptorHeap.GetAddressOf())));
-	RtvDescriptorSize = dxContext.Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	ThrowIfFailed(dxContext.Device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(_rtvDescriptorHeap.GetAddressOf())));
+	_rtvDescriptorSize = dxContext.Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 	CheckForHdrSupport();
 	SetSwapChainColorSpace();
 	UpdateRenderTargetView();
 
-	assert(DepthFormat == DXGI_FORMAT_UNKNOWN or IsDepthFormat(DepthFormat));
-	if (DepthFormat != DXGI_FORMAT_UNKNOWN) {
-		DepthBuffer = DxTexture::CreateDepth(ClientWidth, ClientHeight, DepthFormat);
+	assert(_depthFormat == DXGI_FORMAT_UNKNOWN or IsDepthFormat(_depthFormat));
+	if (_depthFormat != DXGI_FORMAT_UNKNOWN) {
+		_depthBuffer = DxTexture::CreateDepth(ClientWidth, ClientHeight, _depthFormat);
 	}
 
-	Initialized = true;
+	_initialized = true;
 
 	return true;
 }
 
 void DirectWindow::Shutdown() {
-	Initialized = false;
+	_initialized = false;
 }
 
 void DirectWindow::ResizeHandle() {
-	if (Initialized) {
+	if (_initialized) {
 		// Flush the GPU queue to make sure the swap chain's back buffers
 		// are not being referenced by an in-flight command list.
 		DxContext& dxContext = DxContext::Instance();
 		dxContext.FlushApplication();
 
-		for (uint32 i = 0; i < NUM_BUFFERED_FRAMES; i++) {
-			BackBuffers[i].Reset();
+		for (auto& backBuffer : _backBuffers) {
+			backBuffer.Reset();
 		}
 
 		DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
-		ThrowIfFailed(SwapChain->GetDesc(&swapChainDesc));
-		ThrowIfFailed(SwapChain->ResizeBuffers(NUM_BUFFERED_FRAMES, ClientWidth, ClientHeight, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
+		ThrowIfFailed(_swapChain->GetDesc(&swapChainDesc));
+		ThrowIfFailed(_swapChain->ResizeBuffers(NUM_BUFFERED_FRAMES, ClientWidth, ClientHeight, swapChainDesc.BufferDesc.Format, swapChainDesc.Flags));
 
 		CheckForHdrSupport();
 		SetSwapChainColorSpace();
 
-		CurrentBackBufferIndex = SwapChain->GetCurrentBackBufferIndex();
+		_currentBackBufferIndex = _swapChain->GetCurrentBackBufferIndex();
 
 		UpdateRenderTargetView();
 
-		if (DepthBuffer.Resource) {
-			DepthBuffer.Resize(ClientWidth, ClientHeight);
+		if (_depthBuffer.Resource) {
+			_depthBuffer.Resize(ClientWidth, ClientHeight);
 		}
 	}
 }
@@ -268,12 +267,12 @@ PCWCH DirectWindow::ClassName() const {
 }
 
 void DirectWindow::SwapBuffers() {
-	if (Initialized) {
-		uint32 syncInterval = VSync ? 1 : 0;
-		uint32 presentFlags = TearingSupported and not VSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
-		ThrowIfFailed(SwapChain->Present(syncInterval, presentFlags));
+	if (_initialized) {
+		uint32 syncInterval = _vSync ? 1 : 0;
+		uint32 presentFlags = _tearingSupported and not _vSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
+		ThrowIfFailed(_swapChain->Present(syncInterval, presentFlags));
 
-		CurrentBackBufferIndex = SwapChain->GetCurrentBackBufferIndex();
+		_currentBackBufferIndex = _swapChain->GetCurrentBackBufferIndex();
 	}
 }
 
@@ -282,7 +281,7 @@ LRESULT DirectWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 	switch (uMsg) {
 	case WM_SIZE:
-		if (Open) {
+		if (_open) {
 			ClientWidth = LOWORD(lParam);
 			ClientHeight = HIWORD(lParam);
 			ResizeHandle();
@@ -293,8 +292,8 @@ LRESULT DirectWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 		break;
 	}
 	case WM_DESTROY: {
-		if (Open) {
-			Open = false;
+		if (_open) {
+			_open = false;
 			Application::Instance()->NumOpenWindows--;
 			Shutdown();
 		}
@@ -307,4 +306,17 @@ LRESULT DirectWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	}
 
 	return result;
+}
+
+CD3DX12_CPU_DESCRIPTOR_HANDLE DirectWindow::Rtv() const {
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(_rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+	rtv.Offset(_currentBackBufferIndex, _rtvDescriptorSize);
+	return rtv;
+}
+
+CD3DX12_CPU_DESCRIPTOR_HANDLE DirectWindow::Dsv() const {
+	if (_depthBuffer.Resource) {
+		return _depthBuffer.DSVHandle.CpuHandle;
+	}
+	return {};
 }

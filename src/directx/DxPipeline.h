@@ -145,6 +145,12 @@ public:
 		return *this;
 	}
 
+	template<uint32 numElements>
+	DxGraphicsPipelineGenerator& InputLayout(D3D12_INPUT_ELEMENT_DESC (&elements)[numElements]) {
+		Desc.InputLayout = {elements, numElements };
+		return *this;
+	}
+
 	DxGraphicsPipelineGenerator& InputLayout(D3D12_INPUT_ELEMENT_DESC* elements, uint32 numElements) {
 		Desc.InputLayout = { elements, numElements };
 		return *this;
@@ -208,12 +214,12 @@ public:
 };
 
 struct GraphicsPipelineFiles {
-	std::string Rs;
-	std::string Vs;
-	std::string Ps;
-	std::string Ds;
-	std::string Hs;
-	std::string Gs;
+	const char* Rs = nullptr;
+	const char* Vs = nullptr;
+	const char* Ps = nullptr;
+	const char* Ds = nullptr;
+	const char* Hs = nullptr;
+	const char* Gs = nullptr;
 };
 
 class DxPipelineFactory {
@@ -228,26 +234,38 @@ public:
 	void CheckForChangedPipelines();
 	DxPipeline CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files,
 		DxRootSignature userRootSignature = nullptr);
+	DxPipeline CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files,
+		const char* rootSignatureFile);
 private:
 	struct ReloadablePipelineState {
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc;
-		GraphicsPipelineFiles Files;
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc = {};
+		GraphicsPipelineFiles Files = {};
 
-		DxPipelineState Pipeline;
+		DxPipelineState Pipeline = nullptr;
+		DxRootSignature* RootSignature = nullptr;
+		bool UserRootSignature = false;
+
+		D3D12_INPUT_ELEMENT_DESC InputLayout[16] = {};
+
+		ReloadablePipelineState() = default;
+
+		void Initialize(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files, DxRootSignature* rootSignature);
+	};
+
+	struct ReloadableRootSignature {
+		const char* File;
 		DxRootSignature RootSignature;
-		bool UserRootSignature;
-
-		D3D12_INPUT_ELEMENT_DESC InputLayout[16];
-
-		ReloadablePipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files, DxRootSignature userRootSignature);
 	};
 
 	struct ShaderFile {
 		DxBlob Blob;
 		std::set<ReloadablePipelineState*> UsedByPipelines;
+
+		ReloadableRootSignature* RootSignature;
 	};
 
-	void PushBlob(const std::string& filename, ReloadablePipelineState* pipelineIndex);
+	ReloadableRootSignature* PushBlob(const char* filename, ReloadablePipelineState* pipelineIndex, bool isRootSignature = false);
+	void LoadRootSignature(ReloadableRootSignature& r);
 	void LoadPipeline(ReloadablePipelineState& p);
 	DWORD CheckForFileChanges();
 
@@ -255,6 +273,13 @@ private:
 
 	std::unordered_map<std::string, ShaderFile> _shaderBlobs = {};
 	std::deque<ReloadablePipelineState> _pipelines = {};
+	std::deque<ReloadableRootSignature> _rootSignatureFromFiles;
+	std::deque<DxRootSignature> _userRootSignatures;
+
 	std::vector<ReloadablePipelineState*> _dirtyPipelines = {};
+	std::vector<ReloadableRootSignature*> _dirtyRootSignatures = {};
+
 	std::mutex _mutex = {};
+
+	friend void LoadRootSignature(ReloadableRootSignature& r);
 };

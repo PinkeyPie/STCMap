@@ -10,8 +10,9 @@ public:
 	DirectWindow() = default;
 	DirectWindow(const DirectWindow&) = delete;
 	DirectWindow& operator=(const DirectWindow&) = delete;
+	~DirectWindow() override = default;
 
-	bool Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight) override;
+	bool Initialize(const TCHAR* name, int initialWidth, int initialHeight) override;
 
 	virtual void Shutdown();
 	virtual void SwapBuffers();
@@ -19,30 +20,43 @@ public:
 	
 	PCTCH ClassName() const override;
 	LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
+
+	uint32 CurrentBackBufferIndex() const {
+		return _currentBackBufferIndex;
+	}
 	DXGI_FORMAT GetBackBufferFormat() const;
-
-	DxSwapChain SwapChain;
-	DxResource BackBuffers[NUM_BUFFERED_FRAMES];
-	Com<ID3D12DescriptorHeap> RtvDescriptorHeap;
-	uint32 RtvDescriptorSize;
-	uint32 CurrentBackBufferIndex;
-
-	ColorDepth ColorDepth = EColorDepth8;
-
-	RECT WindowRectBeforeFullscreen;
-
-	bool TearingSupported = false;
-	bool HdrSupport = false;
-	bool VSync = false;
-	bool Open = true;
-	bool Initialized = false;
-
-	DxTexture DepthBuffer;
-	DXGI_FORMAT DepthFormat = DXGI_FORMAT_UNKNOWN;
+	DxResource GetCurrentBackBuffer() const {
+		return _backBuffers[_currentBackBufferIndex];
+	}
+	CD3DX12_CPU_DESCRIPTOR_HANDLE Rtv() const;
+	uint32 RtvDescriptorSize() const {
+		return _rtvDescriptorSize;
+	}
+	CD3DX12_CPU_DESCRIPTOR_HANDLE Dsv() const;
+	bool IsOpen() const {
+		return _open;
+	}
+		
 private:
+	DxSwapChain _swapChain;
+	DxResource _backBuffers[NUM_BUFFERED_FRAMES];
+	ColorDepth _colorDepth = EColorDepth8;
+	Com<ID3D12DescriptorHeap> _rtvDescriptorHeap;
+	uint32 _currentBackBufferIndex;
+	int32 _rtvDescriptorSize;
+
+	DxTexture _depthBuffer;
+	DXGI_FORMAT _depthFormat = DXGI_FORMAT_UNKNOWN;
+
+	bool _tearingSupported = false;
+	bool _hdrSupport = false;
+	bool _vSync = false;
+	bool _open = true;
+	bool _initialized = false;
+
 	void CreateSwapchain(const DxCommandQueue& commandQueue);
 	void CheckForHdrSupport();
-	void SetSwapChainColorSpace();
+	void SetSwapChainColorSpace() const;
 	void CheckTearingSupport();
 	void UpdateRenderTargetView();
 };

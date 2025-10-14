@@ -2,7 +2,7 @@
 
 struct PsInput
 {
-    float2 uv : TEXCOORD;
+    float2 uv : TEXCOORDS;
     float3 normal : NORMAL;
 };
 

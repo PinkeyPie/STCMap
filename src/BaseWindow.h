@@ -9,7 +9,7 @@ public:
 
     static LRESULT CALLBACK WindowsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     [[nodiscard]] HWND GetWindow() const { return hwnd; }
-    virtual bool Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight);
+    virtual bool Initialize(const TCHAR* name, int initialWidth = CW_USEDEFAULT, int initialHeight = CW_USEDEFAULT);
     void SetTitle(const WCHAR* format, ...);
 
     int ClientWidth = 800;
@@ -21,8 +21,6 @@ protected:
         DWORD dwExStyle = 0,
         int x = CW_USEDEFAULT,
         int y = CW_USEDEFAULT,
-        int nWidth = CW_USEDEFAULT,
-        int nHeight = CW_USEDEFAULT,
         HWND hWndParent = nullptr,
         HMENU hMenu = nullptr);
     virtual PCWCH ClassName() const = 0;

@@ -17,7 +17,7 @@ LRESULT BaseWindow::WindowsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
-BOOL BaseWindow::Create(PCWCH lpWindowName, DWORD dwStyle, DWORD dwExStyle, int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu) {
+BOOL BaseWindow::Create(PCWCH lpWindowName, DWORD dwStyle, DWORD dwExStyle, int x, int y, HWND hWndParent, HMENU hMenu) {
 	hAppInstance = GetModuleHandleW(nullptr);
 	if (GetClassInfoW(hAppInstance, ClassName(), nullptr)) {
 		return FALSE;
@@ -38,10 +38,15 @@ BOOL BaseWindow::Create(PCWCH lpWindowName, DWORD dwStyle, DWORD dwExStyle, int 
 		return FALSE;
 	}
 
-	RECT R = { 0, 0, ClientWidth, ClientHeight };
+	RECT R;
+	R.left = 0;
+	R.right = ClientWidth;
+	R.top = 0;
+	R.bottom = ClientHeight;
+
 	AdjustWindowRect(&R, WS_OVERLAPPEDWINDOW, false);
 	
-	hwnd = CreateWindowExW(dwExStyle, ClassName(), lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hAppInstance, this);
+	hwnd = CreateWindowExW(dwExStyle, ClassName(), lpWindowName, dwStyle, x, y, ClientWidth, ClientHeight, hWndParent, hMenu, hAppInstance, this);
 	if (!hwnd) {
 		MessageBoxW(nullptr, L"CreateWindow Failed.", nullptr, 0);
 	}
@@ -98,7 +103,7 @@ LRESULT BaseWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-bool BaseWindow::Initialize(const TCHAR* name, uint32 initialWidth, uint32 initialHeight) {
+bool BaseWindow::Initialize(const TCHAR* name, int initialWidth, int initialHeight) {
 	ClientWidth = initialWidth;
 	ClientHeight = initialHeight;
 	return Create(name, WS_OVERLAPPEDWINDOW);

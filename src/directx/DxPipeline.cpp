@@ -1,5 +1,10 @@
+#include "DxPipeline.h"
+
 #include "../pch.h"
 #include "DxPipeline.h"
+
+#include <corecrt_io.h>
+
 #include "../core/threading.h"
 
 #include <unordered_map>
@@ -21,13 +26,11 @@ static std::wstring StringToWideString(const std::string& s) {
 	return std::wstring(s.begin(), s.end());
 }
 
-DxPipelineFactory::ReloadablePipelineState::ReloadablePipelineState(
-	const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc,
-	const GraphicsPipelineFiles& files, DxRootSignature userRootSignature) :
-	Desc(desc),
-	Files(files),
-	RootSignature(userRootSignature),
-	UserRootSignature(userRootSignature != nullptr) {
+void DxPipelineFactory::ReloadablePipelineState::Initialize(const D3D12_GRAPHICS_PIPELINE_STATE_DESC &desc, const GraphicsPipelineFiles &files, DxRootSignature *rootSignature) {
+	Desc = desc;
+	Files = files;
+	RootSignature = rootSignature;
+
 	assert(desc.InputLayout.NumElements <= arraysize(InputLayout));
 
 	memcpy(InputLayout, desc.InputLayout.pInputElementDescs, sizeof(D3D12_INPUT_ELEMENT_DESC) * desc.InputLayout.NumElements);
@@ -38,100 +41,142 @@ DxPipelineFactory::ReloadablePipelineState::ReloadablePipelineState(
 	}
 }
 
-void DxPipelineFactory::PushBlob(const std::string& filename, ReloadablePipelineState* pipelineIndex) {
-	if (!filename.empty()) {
+DxPipelineFactory::ReloadableRootSignature* DxPipelineFactory::PushBlob(const char* filename, ReloadablePipelineState* pipelineIndex, bool isRootSignature) {
+	ReloadableRootSignature* result = nullptr;
+
+	if (filename) {
 		auto it = _shaderBlobs.find(filename);
 		if (it == _shaderBlobs.end()) {
+			// New file
 			std::wstring filepath = shaderDir + StringToWideString(filename) + L".cso";
 
 			DxBlob blob;
 			ThrowIfFailed(D3DReadFileToBlob(filepath.c_str(), blob.GetAddressOf()));
 
+			if (isRootSignature) {
+				_rootSignatureFromFiles.push_back({filename, nullptr});
+				result = &_rootSignatureFromFiles.back();
+			}
+
 			_shaderBlobs[filename] = {.Blob = blob, .UsedByPipelines = {pipelineIndex} };
 		}
 		else {
+			// Already used
 			it->second.UsedByPipelines.insert(pipelineIndex);
+
+			if (isRootSignature) {
+				if (!it->second.RootSignature) {
+					_rootSignatureFromFiles.push_back({filename, nullptr});
+					it->second.RootSignature = &_rootSignatureFromFiles.back();
+				}
+
+				result = it->second.RootSignature;
+			}
 		}
 	}
-}
-
-DxPipeline DxPipelineFactory::CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files, DxRootSignature userRootSignature) {
-	assert(!files.Rs.empty() ^ userRootSignature != nullptr);
-
-	_pipelines.emplace_back(desc, files, userRootSignature);
-	auto& state = _pipelines.back();
-
-	PushBlob(files.Rs, &state);
-	PushBlob(files.Vs, &state);
-	PushBlob(files.Ps, &state);
-	PushBlob(files.Gs, &state);
-	PushBlob(files.Gs, &state);
-	PushBlob(files.Ds, &state);
-	PushBlob(files.Hs, &state);
-
-	// What. The. Fuck.
-	// The root signature looses its internal pointer, If I take the pointer to the ComPtr
-	// Pipeline doesn't
-	auto p = state.Pipeline.Get();
-	auto r = state.RootSignature.Get();
-
-	DxPipeline result = { &state.Pipeline, &state.RootSignature };
-
-	state.Pipeline = p;
-	state.RootSignature = r;
 
 	return result;
 }
 
+DxPipeline DxPipelineFactory::CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files, DxRootSignature userRootSignature) {
+	_pipelines.emplace_back();
+	auto& state = _pipelines.back();
+
+	ReloadableRootSignature* reloadableRs = PushBlob(files.Rs, &state, true);
+	PushBlob(files.Vs, &state);
+	PushBlob(files.Ps, &state);
+	PushBlob(files.Gs, &state);
+	PushBlob(files.Ds, &state);
+	PushBlob(files.Hs, &state);
+
+	_userRootSignatures.push_back(userRootSignature);
+	DxRootSignature* rootSignature = &_userRootSignatures.back();
+	_userRootSignatures.back() = userRootSignature; // Fuck you
+
+	state.Initialize(desc, files, rootSignature);
+
+	DxPipeline result = {&state.Pipeline, rootSignature};
+	return result;
+}
+
+DxPipeline DxPipelineFactory::CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC &desc, const GraphicsPipelineFiles &files, const char *rootSignatureFile) {
+	_pipelines.emplace_back();
+	auto& state = _pipelines.back();
+
+	ReloadableRootSignature* reloadableRs = PushBlob(rootSignatureFile, &state, true);
+	PushBlob(files.Vs, &state);
+	PushBlob(files.Ps, &state);
+	PushBlob(files.Gs, &state);
+	PushBlob(files.Ds, &state);
+	PushBlob(files.Hs, &state);
+
+	DxRootSignature* rootSignature = &reloadableRs->RootSignature;
+
+	state.Initialize(desc, files, rootSignature);
+
+	DxPipeline result = {&state.Pipeline, rootSignature};
+	return result;
+}
+
+void DxPipelineFactory::LoadRootSignature(ReloadableRootSignature &r) {
+	DxBlob rs = _shaderBlobs[r.File].Blob;
+
+	DxContext::Instance().RetireObject(r.RootSignature);
+	r.RootSignature = CreateRootSignature(rs);
+}
+
 void DxPipelineFactory::LoadPipeline(ReloadablePipelineState& p) {
 	DxContext& dxContext = DxContext::Instance();
-	if (!p.Files.Rs.empty()) {
-		DxBlob rs = _shaderBlobs[p.Files.Rs].Blob;
-		dxContext.RetireObject(p.RootSignature);
-		p.RootSignature = CreateRootSignature(rs);
-	}
-	if (!p.Files.Vs.empty()) {
+	if (p.Files.Vs) {
 		DxBlob shader = _shaderBlobs[p.Files.Vs].Blob;
 		p.Desc.VS = CD3DX12_SHADER_BYTECODE(shader.Get());
 	}
-	if (!p.Files.Ps.empty()) {
+	if (p.Files.Ps) {
 		DxBlob shader = _shaderBlobs[p.Files.Ps].Blob;
 		p.Desc.PS = CD3DX12_SHADER_BYTECODE(shader.Get());
 	}
-	if (!p.Files.Gs.empty()) {
+	if (p.Files.Gs) {
 		DxBlob shader = _shaderBlobs[p.Files.Gs].Blob;
 		p.Desc.GS = CD3DX12_SHADER_BYTECODE(shader.Get());
 	}
-	if (!p.Files.Ds.empty()) {
+	if (p.Files.Ds) {
 		DxBlob shader = _shaderBlobs[p.Files.Ds].Blob;
 		p.Desc.DS = CD3DX12_SHADER_BYTECODE(shader.Get());
 	}
-	if (!p.Files.Hs.empty()) {
+	if (p.Files.Hs) {
 		DxBlob shader = _shaderBlobs[p.Files.Ds].Blob;
 		p.Desc.HS = CD3DX12_SHADER_BYTECODE(shader.Get());
 	}
 
-	p.Desc.pRootSignature = p.RootSignature.Get();
+	p.Desc.pRootSignature = p.RootSignature->Get();
 	dxContext.RetireObject(p.Pipeline);
 	ThrowIfFailed(dxContext.Device->CreateGraphicsPipelineState(&p.Desc, IID_PPV_ARGS(p.Pipeline.GetAddressOf())));
 }
 
 void DxPipelineFactory::CreateAllReloadablePipelines() {
+	concurrency::parallel_for(0, (int)_rootSignatureFromFiles.size(), [&](int i) {
+		LoadRootSignature(_rootSignatureFromFiles[i]);
+	});
+
 	concurrency::parallel_for(0, (int)_pipelines.size(), [&](int i) {
 		LoadPipeline(_pipelines[i]);
 	});
 
 	std::thread fileWatcher([&]() {
-		this->CheckForFileChanges();
+		CheckForFileChanges();
 	});
 	fileWatcher.detach();
 }
 
 void DxPipelineFactory::CheckForChangedPipelines() {
 	_mutex.lock();
+	concurrency::parallel_for(0, (int)_dirtyRootSignatures.size(), [&](int i) {
+		LoadRootSignature(*_dirtyRootSignatures[i]);
+	});
 	concurrency::parallel_for(0, (int)_dirtyPipelines.size(), [&](int i) {
 		LoadPipeline(*_dirtyPipelines[i]);
 	});
+	_dirtyPipelines.clear();
 	_dirtyPipelines.clear();
 	_mutex.unlock();
 }
@@ -231,6 +276,9 @@ DWORD DxPipelineFactory::CheckForFileChanges() {
 						_mutex.lock();
 						it->second.Blob = blob;
 						_dirtyPipelines.insert(_dirtyPipelines.end(), it->second.UsedByPipelines.begin(), it->second.UsedByPipelines.end());
+						if (it->second.RootSignature) {
+							_dirtyRootSignatures.push_back(it->second.RootSignature);
+						}
 						_mutex.unlock();
 					}
 

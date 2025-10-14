@@ -126,7 +126,7 @@ bool Application::HandleWindowsMessages() {
 			running = false;
 		}
 
-		if (_mainWindow.Open and _mainWindow.GetWindow() == msg.hwnd) {
+		if (_mainWindow.IsOpen() and _mainWindow.GetWindow() == msg.hwnd) {
 			switch (msg.message) {
 			case WM_SYSKEYDOWN:
 			case WM_SYSKEYUP:
@@ -236,9 +236,8 @@ bool Application::HandleWindowsMessages() {
 
 uint64 Application::RenderToWindow(float* clearColor) {
 	DxResource frameResult = DxRenderer::Instance()->RenderTarget.ColorAttachments[0];
-	DxResource backBuffer = _mainWindow.BackBuffers[_mainWindow.CurrentBackBufferIndex];
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(_mainWindow.RtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), _mainWindow.CurrentBackBufferIndex, _mainWindow.RtvDescriptorSize);
-
+	DxResource backBuffer = _mainWindow.GetCurrentBackBuffer();
+	
 	DxCommandList* cl = DxContext::Instance().GetFreeRenderCommandList();
 
 	CD3DX12_RECT scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
@@ -270,8 +269,6 @@ bool Application::Initialize() {
 	DxRenderer* renderer = DxRenderer::Instance();
 	renderer->Initialize(initialWidth, initialHeight);
 
-	_mainWindow.ColorDepth = EColorDepth8;
-	_mainWindow.DepthFormat = DXGI_FORMAT_UNKNOWN;
 	if (not _mainWindow.Initialize(TEXT("Main Window"), initialWidth, initialHeight)) {
 		return false;
 	}
@@ -292,15 +289,16 @@ void Application::Run() {
 	fenceValues[NUM_BUFFERED_FRAMES - 1] = dxContext.RenderQueue.Signal();
 
 	DxRenderer* renderer = DxRenderer::Instance();
+	
 	while (NewFrame()) {
-		dxContext.RenderQueue.WaitForFence(fenceValues[_mainWindow.CurrentBackBufferIndex]);
+		dxContext.RenderQueue.WaitForFence(fenceValues[_mainWindow.CurrentBackBufferIndex()]);
 		dxContext.NewFrame(frameId);
 
-		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(_mainWindow.RtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), _mainWindow.CurrentBackBufferIndex, _mainWindow.RtvDescriptorSize);
-		DxResource backBuffer = _mainWindow.BackBuffers[_mainWindow.CurrentBackBufferIndex];
+		const CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = _mainWindow.Rtv();
+		const DxResource backBuffer = _mainWindow.GetCurrentBackBuffer();
 
 		renderer->BeginFrame(rtv, backBuffer);
-		fenceValues[_mainWindow.CurrentBackBufferIndex] = renderer->DummyRender();
+		fenceValues[_mainWindow.CurrentBackBufferIndex()] = renderer->DummyRender();
 
 		float clearColor1[] = { 1.f, 0.f, 0.f, 1.f };
 
