@@ -43,6 +43,8 @@ public:
 	SubmeshInfo PushSphere(uint16 slices, uint16 rows, float radius);
 	SubmeshInfo PushCapsule(uint16 slices, uint16 rows, float height, float radius);
 
+	SubmeshInfo PushAssimpMesh(const struct aiMesh* mesh, float scale, AABBCollider* aabb = nullptr);
+
 	DxMesh CreateDxMesh() const;
 	DxVertexBuffer CreateVertexBufferWithAlternativeLayout(DxContext* context, uint32 otherFlags, bool allowUnorderedAccess = false);
 

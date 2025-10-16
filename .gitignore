@@ -4,3 +4,5 @@
 /out/
 /.vs/
 /Folder.DotSettings.user
+/vcpkg_installed/
+/shaders/bin/

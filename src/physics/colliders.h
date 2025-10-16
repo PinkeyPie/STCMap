@@ -20,11 +20,8 @@ struct IndexedLine32 {
 
 struct LineSegment {
 	vec3 A, B;
-};
 
-struct SphereCollider {
-	vec3 Center;
-	float Radius;
+	vec3 ClosestPoint(const vec3& q);
 };
 
 struct CapsuleCollider {
@@ -63,8 +60,13 @@ struct AABBCollider {
 	AABBCorners GetCorners(quat rotation, vec3 translation) const;
 
 	static AABBCollider NegativeInfinity();
-	static AABBCollider FromMatrix(vec3 minCorner, vec3 maxCorner);
+	static AABBCollider FromMinMax(vec3 minCorner, vec3 maxCorner);
 	static AABBCollider FromCenterRadius(vec3 center, vec3 radius);
+
+	bool Collide(const AABBCollider& other);
+	vec3 ClosestPoint(const vec3& q);
+private:
+	bool Collide(vec3 point);
 };
 
 struct ConvexHullCollider {
@@ -84,6 +86,14 @@ struct PlaneCollider {
 	float SignedDistance(const vec3& p) const;
 	bool IsFrontFacingTo(const vec3& dir) const;
 	vec3 GetPointOnPlane() const;
+};
+
+struct SphereCollider {
+	vec3 Center;
+	float Radius;
+
+	bool Collide(const SphereCollider& other);
+	bool Collide(const PlaneCollider& other);
 };
 
 enum ColliderType : uint16 {
@@ -124,3 +134,5 @@ struct Ray {
 		return IntersectSphere(sphere.Center, sphere.Radius, outT);
 	}
 };
+
+float ClosestPointSegmentSegment(const LineSegment& l1, const LineSegment& l2, vec3& c1, vec3& c2);

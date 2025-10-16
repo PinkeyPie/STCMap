@@ -5,7 +5,7 @@ DxRootSignature CreateRootSignature(DxBlob rootSignatureBlob) {
 	DxContext& dxContext = DxContext::Instance();
 	DxRootSignature rootSignature;
 
-	ThrowIfFailed(dxContext.Device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
+	ThrowIfFailed(dxContext.GetDevice()->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
 		rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(rootSignature.GetAddressOf())));
 
 	return rootSignature;
@@ -22,7 +22,7 @@ DxRootSignature CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC1& desc) {
 	DxContext& dxContext = DxContext::Instance();
 	D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 	featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-	if (FAILED(dxContext.Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
+	if (FAILED(dxContext.GetDevice()->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))) {
 		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 	}
 
@@ -35,7 +35,7 @@ DxRootSignature CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC1& desc) {
 
 	DxRootSignature rootSignature;
 
-	ThrowIfFailed(dxContext.Device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(rootSignature.GetAddressOf())));
+	ThrowIfFailed(dxContext.GetDevice()->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(rootSignature.GetAddressOf())));
 
 	return rootSignature;
 }
@@ -58,7 +58,7 @@ DxRootSignature CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC& desc) {
 
 	DxRootSignature rootSignature;
 
-	ThrowIfFailed(dxContext.Device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
+	ThrowIfFailed(dxContext.GetDevice()->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
 		rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature)));
 
 	return rootSignature;
@@ -77,7 +77,7 @@ DxRootSignature CreateRootSignature(CD3DX12_ROOT_PARAMETER* rootParameters, uint
 DxCommandSignature CreateCommandSignature(DxRootSignature rootSignature, const D3D12_COMMAND_SIGNATURE_DESC& commandSignatureDesc) {
 	DxContext& dxContext = DxContext::Instance();
 	DxCommandSignature commandSignature;
-	ThrowIfFailed(dxContext.Device->CreateCommandSignature(&commandSignatureDesc,
+	ThrowIfFailed(dxContext.GetDevice()->CreateCommandSignature(&commandSignatureDesc,
 		commandSignatureDesc.NumArgumentDescs == 1 ? 0 : rootSignature.Get(),
 		IID_PPV_ARGS(commandSignature.GetAddressOf())));
 	return commandSignature;

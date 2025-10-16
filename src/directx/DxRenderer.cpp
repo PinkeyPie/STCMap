@@ -2,17 +2,22 @@
 #include "DxContext.h"
 #include "DxCommandList.h"
 #include "DirectXColors.h"
+#include "BarrierBatcher.h"
+#include "../physics/geometry.h"
+#include "DxTexture.h"
+#include "../physics/mesh.h"
 
 #include "model_rs.hlsli"
 
 #include <iostream>
 
-#include "BarrierBatcher.h"
-#include "../physics/geometry.h"
-
 DxRenderer* DxRenderer::_instance = new DxRenderer{};
 
 void DxRenderer::Initialize(uint32 width, uint32 height) {
+	const aiScene* scene = LoadAssimpScene("assets/meshes/Kettle.fbx");
+	AnalyzeScene(scene);
+	FreeScene(scene);
+
 	RenderWidth = width;
 	RenderHeight = height;
 
@@ -38,6 +43,9 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 
 	DxPipelineFactory* pipelineFactory = DxPipelineFactory::Instance();
 
+	_texture = DxTexture::LoadFromFile("assets/textures/Material.001_Base_color.png");
+	_textureHandle = GlobalDescriptorHeap.Push2DTextureSRV(_texture);
+
 	{
 		auto desc = CREATE_GRAPHICS_PIPELINE
 		.RenderTargets(RenderTarget.RenderTargetFormat)
@@ -62,6 +70,9 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 }
 
 void DxRenderer::BeginFrame(uint32 width, uint32 height) {
+	RenderTarget.ColorAttachments[0] = FrameResult.Resource;
+	RenderTarget.RtvHandles[0] = FrameResult.RTVHandles.CpuHandle;
+
 	if (RenderWidth != width or RenderHeight != height) {
 		RenderWidth = width;
 		RenderHeight = height;
@@ -76,13 +87,12 @@ void DxRenderer::BeginFrame(uint32 width, uint32 height) {
 
 	_camera.RecalculateMatrices(width, height);
 	_viewport = RenderTarget.Viewport;
-	CurrentBackBuffer = FrameResult.Resource;
-	BackBufferRtv = RenderTarget.RtvHandles[0];
 }
 
 void DxRenderer::BeginFrame(CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle, DxResource renderTarget) {
-	CurrentBackBuffer = renderTarget;
-	BackBufferRtv = rtvHandle;
+	RenderTarget.ColorAttachments[0] = renderTarget;
+	RenderTarget.RtvHandles[0] = rtvHandle;
+
 	uint32 width = renderTarget->GetDesc().Width;
 	uint32 height = renderTarget->GetDesc().Height;
 	if (width != RenderWidth or height != RenderHeight) {
@@ -99,7 +109,7 @@ void DxRenderer::BeginFrame(CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle, DxResource 
 }
 
 
-int DxRenderer::DummyRender() {
+int DxRenderer::DummyRender(float dt) {
 	DxContext& dxContext = DxContext::Instance();
 	DxCommandList* cl = dxContext.GetFreeRenderCommandList();
 
@@ -108,11 +118,11 @@ int DxRenderer::DummyRender() {
 	cl->SetScissor(scissorRect);
 	cl->SetViewport(_viewport);
 
-	BarrierBatcher(cl).Transition(CurrentBackBuffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	BarrierBatcher(cl).Transition(RenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	cl->ClearRTV(BackBufferRtv, _clearColor);
+	cl->ClearRTV(RenderTarget.RtvHandles[0], _clearColor);
 	cl->ClearDepth(RenderTarget.DsvHandle);
-	cl->CommandList->OMSetRenderTargets(1, &BackBufferRtv, false, &RenderTarget.DsvHandle);
+	cl->SetRenderTarget(RenderTarget);
 
 	cl->SetPipelineState(*_presentPipeline.Pipeline);
 	cl->SetGraphicsRootSignature(*_presentPipeline.RootSignature);
@@ -127,8 +137,8 @@ int DxRenderer::DummyRender() {
 	cl->SetGraphics32BitConstants(0, TransformCb{ _camera.ViewProj, mat4::identity });
 	cl->DrawIndexed(_submesh.NumTriangles * 3, 1, _submesh.FirstTriangle * 3, _submesh.BaseVertex, 0);
 
-	BarrierBatcher(cl).Transition(CurrentBackBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
-	CurrentBackBuffer.Reset();
+	BarrierBatcher(cl).Transition(RenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
+	RenderTarget.ColorAttachments[0].Reset();
 
 	return dxContext.ExecuteCommandList(cl);
 }

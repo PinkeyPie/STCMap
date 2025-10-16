@@ -11,6 +11,8 @@
 #include "DxUploadBuffer.h"
 #include "DxDescriptorHeap.h"
 
+class DxTexture;
+
 struct ObjectRetirement {
 	DxObject RetiredObjects[NUM_BUFFERED_FRAMES][128];
 	volatile uint32 NumRetireObjects[NUM_BUFFERED_FRAMES];
@@ -27,39 +29,42 @@ public:
 
 	void NewFrame(uint64 frameId);
 	void FlushApplication();
+	bool IsRunning() const {
+		return _running;
+	}
+
+	DxDescriptorHandle PushRenderTargetView(DxTexture* renderTarget) {
+		return _rtvAllocator.PushRenderTargetView(renderTarget);
+	}
+	DxDescriptorHandle PushDepthStencilView(DxTexture* depthBuffer) {
+		return _dsvAllocator.PushDepthStencilView(depthBuffer);
+	}
+	void CreateRenderTargetView(DxTexture* renderTarget, DxDescriptorHandle handle) {
+		_rtvAllocator.CreateRenderTargetView(renderTarget, handle);
+	}
+	void CreateDepthStencilView(DxTexture* depthBuffer, DxDescriptorHandle handle) {
+		_dsvAllocator.CreateDepthStencilView(depthBuffer, handle);
+	}
 
 	void RetireObject(DxObject object);
 
 	DxCommandList* GetFreeCopyCommandList();
 	DxCommandList* GetFreeComputeCommandList(bool async);
 	DxCommandList* GetFreeRenderCommandList();
+	DxDevice GetDevice() const {
+		return _device;
+	}
+	DxFactory GetFactory() const {
+		return _factory;
+	}
+
 	uint64 ExecuteCommandList(DxCommandList* commandList);
 
-	DxFactory Factory;
-	DxAdapter Adapter;
-	DxDevice Device;
+	DxCommandQueue RenderQueue = D3D12_COMMAND_LIST_TYPE_DIRECT;
+	DxCommandQueue ComputeQueue = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+	DxCommandQueue CopyQueue = D3D12_COMMAND_LIST_TYPE_COPY;
 
-	DxCommandQueue RenderQueue;
-	DxCommandQueue ComputeQueue;
-	DxCommandQueue CopyQueue;
-
-	bool RaytracingSupported;
-
-	uint64 FrameId;
-	uint32 BufferedFrameId;
-
-	std::mutex AllocationMutex = {};
-	MemoryArena Arena;
-
-	ObjectRetirement ObjectRetirement;
-
-	DxRtvDescriptorHeap RtvAllocator;
-	DxDsvDescriptorHeap DsvAllocator;
-
-	DxPagePool PagePools[NUM_BUFFERED_FRAMES] = {};
-	DxFrameDescriptorAllocator FrameDescriptorAllocator = {};
-
-	volatile bool Running = true;
+	bool CheckTearingSupport();
 
 private:
 	void CreateFactory();
@@ -77,5 +82,27 @@ private:
 	void InitializeBuffer(DxBuffer& buffer, uint32 elementSize, uint32 elementCount, void* data = 0, bool allowUnorderedAccess = false);
 	void InitializeDescriptorHeap(DxDescriptorHeap& descriptorHeap, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors, bool shaderVisible = true);
 
+	uint64 _frameId = 0;
+	uint32 _bufferFrameId = 0;
+
+	DxFactory _factory = {};
+	DxAdapter _adapter = {};
+	DxDevice _device = {};
+
+	std::mutex _allocationMutex = {};
+	MemoryArena _arena;
+
+	ObjectRetirement _objectRetirement = {};
+
+	DxRtvDescriptorHeap  _rtvAllocator = {};
+	DxDsvDescriptorHeap _dsvAllocator = {};
+
+	DxPagePool _pagePools[NUM_BUFFERED_FRAMES] = {};
+	DxFrameDescriptorAllocator _frameDescriptorAllocator = {};
+
+	volatile bool _running = true;
+
+	bool _raytracingSupported = false;
+	bool _meshShaderSupported = false;
 	static DxContext& _instance;
 };

@@ -1,3 +1,4 @@
+import shutil
 import sys
 import os
 import subprocess
@@ -28,8 +29,10 @@ def compile_shader(relative_path: str) -> None:
 
 
 def compile_shaders(dirname):
-	if not os.path.exists(os.path.join(shaders_dir, 'bin')):
-		os.mkdir(os.path.join(shaders_dir, "bin"))
+	if os.path.exists(os.path.join(shaders_dir, "bin")):
+		shutil.rmtree(os.path.join(shaders_dir, "bin"))
+	os.mkdir(os.path.join(shaders_dir, "bin"))
+
 	abs_path = os.path.join(shaders_dir, dirname)
 	files = os.listdir(abs_path)
 	for file in files:

@@ -9,26 +9,8 @@ namespace {
 	}
 }
 
-void DirectWindow::CheckTearingSupport() {
-	DxFactory factory = DxContext::Instance().Factory;
-	BOOL allowTearing = FALSE;
-
-	// Rather than create the DXGI 1.5 factory interface directly, we create the
-	// DXGI 1.4 interface and query for the 1.5 interface. This is to enable the 
-	// graphics debugging tools which will not support the 1.5 factory interface 
-	// until a future update.
-	Com<IDXGIFactory5> factory5;
-	if (SUCCEEDED(factory.As(&factory5))) {
-		if (FAILED(factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing)))) {
-			allowTearing = FALSE;
-		}
-	}
-
-	_tearingSupported = allowTearing == TRUE;
-}
-
 void DirectWindow::CreateSwapchain(const DxCommandQueue& commandQueue) {
-	DxFactory factory = DxContext::Instance().Factory;
+	DxFactory factory = DxContext::Instance().GetFactory();
 
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
 	swapChainDesc.Width = ClientWidth;
@@ -53,7 +35,7 @@ void DirectWindow::CreateSwapchain(const DxCommandQueue& commandQueue) {
 
 	Com<IDXGISwapChain1> swapChain1;
 	ThrowIfFailed(factory->CreateSwapChainForHwnd(
-		commandQueue.CommandQueue.Get(),
+		commandQueue.NativeQueue.Get(),
 		hwnd,
 		&swapChainDesc,
 		nullptr,
@@ -74,7 +56,7 @@ DXGI_FORMAT DirectWindow::GetBackBufferFormat() const {
 }
 
 void DirectWindow::CheckForHdrSupport() {
-	DxFactory factory = DxContext::Instance().Factory;
+	DxFactory factory = DxContext::Instance().GetFactory();
 	RECT windowRect = { 0, 0, (LONG)ClientWidth, (LONG)ClientHeight };
 	GetWindowRect(hwnd, &windowRect);
 
@@ -179,7 +161,7 @@ void DirectWindow::SetSwapChainColorSpace() const {
 }
 
 void DirectWindow::UpdateRenderTargetView() {
-	DxDevice device = DxContext::Instance().Device;
+	DxDevice device = DxContext::Instance().GetDevice();
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(_rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
@@ -204,7 +186,7 @@ bool DirectWindow::Initialize(const TCHAR* name, int initialWidth, int initialHe
 	}
 
 	DxContext& dxContext = DxContext::Instance();
-	CheckTearingSupport();
+	_tearingSupported = dxContext.CheckTearingSupport();
 
 	CreateSwapchain(dxContext.RenderQueue);
 	_currentBackBufferIndex = _swapChain->GetCurrentBackBufferIndex();
@@ -213,8 +195,8 @@ bool DirectWindow::Initialize(const TCHAR* name, int initialWidth, int initialHe
 	descriptorHeapDesc.NumDescriptors = NUM_BUFFERED_FRAMES;
 	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 
-	ThrowIfFailed(dxContext.Device->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(_rtvDescriptorHeap.GetAddressOf())));
-	_rtvDescriptorSize = dxContext.Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	ThrowIfFailed(dxContext.GetDevice()->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(_rtvDescriptorHeap.GetAddressOf())));
+	_rtvDescriptorSize = dxContext.GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 	CheckForHdrSupport();
 	SetSwapChainColorSpace();
@@ -280,29 +262,38 @@ LRESULT DirectWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	LRESULT result = 0;
 
 	switch (uMsg) {
-	case WM_SIZE:
-		if (_open) {
-			ClientWidth = LOWORD(lParam);
-			ClientHeight = HIWORD(lParam);
+		case WM_SIZE:
+			if (_open) {
+				ClientWidth = LOWORD(lParam);
+				ClientHeight = HIWORD(lParam);
+				if (not _sizing) {
+					ResizeHandle();
+				}
+			}
+			break;
+		case WM_ENTERSIZEMOVE:
+			_sizing = true;
+			break;
+		case WM_EXITSIZEMOVE:
+			_sizing = false;
 			ResizeHandle();
+			break;
+		case WM_CLOSE: {
+			DestroyWindow(hwnd);
+			break;
 		}
-		break;
-	case WM_CLOSE: {
-		DestroyWindow(hwnd);
-		break;
-	}
-	case WM_DESTROY: {
-		if (_open) {
-			_open = false;
-			Application::Instance()->NumOpenWindows--;
-			Shutdown();
+		case WM_DESTROY: {
+			if (_open) {
+				_open = false;
+				Application::Instance()->NumOpenWindows--;
+				Shutdown();
+			}
+			break;
 		}
-		break;
-	}
-	default: {
-		result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
-		break;
-	}
+		default: {
+			result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+			break;
+		}
 	}
 
 	return result;
@@ -319,4 +310,8 @@ CD3DX12_CPU_DESCRIPTOR_HANDLE DirectWindow::Dsv() const {
 		return _depthBuffer.DSVHandle.CpuHandle;
 	}
 	return {};
+}
+
+void DirectWindow::ToggleVSync() {
+	_vSync = !_vSync;
 }

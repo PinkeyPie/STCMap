@@ -1,0 +1,7 @@
+{
+  "dependencies": [
+    "assimp",
+    "directxtex",
+    "entt"
+  ]
+}

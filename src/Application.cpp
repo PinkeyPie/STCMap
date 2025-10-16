@@ -281,7 +281,6 @@ bool Application::Initialize() {
 
 void Application::Run() {
 	DxContext& dxContext = DxContext::Instance();
-	float dt;
 
 	uint64 fenceValues[NUM_BUFFERED_FRAMES] = {};
 	uint64 frameId = 0;
@@ -298,7 +297,7 @@ void Application::Run() {
 		const DxResource backBuffer = _mainWindow.GetCurrentBackBuffer();
 
 		renderer->BeginFrame(rtv, backBuffer);
-		fenceValues[_mainWindow.CurrentBackBufferIndex()] = renderer->DummyRender();
+		fenceValues[_mainWindow.CurrentBackBufferIndex()] = renderer->DummyRender(_timer.DeltaTime());
 
 		float clearColor1[] = { 1.f, 0.f, 0.f, 1.f };
 

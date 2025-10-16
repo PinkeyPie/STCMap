@@ -12,35 +12,41 @@ void DxDescriptorHeap::Initialize(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDes
 		desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	}
 
-	ThrowIfFailed(dxContext.Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&DescriptorHeap)));
+	ThrowIfFailed(dxContext.GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&DescriptorHeap)));
 
 	Type = type;
-	MaxNumDescriptors = numDescriptors;
-	DescriptorHandleIncrementSize = dxContext.Device->GetDescriptorHandleIncrementSize(type);
-	Base.CpuHandle = DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	_maxNumDescriptors = numDescriptors;
+	_descriptorHandleIncrementSize = dxContext.GetDevice()->GetDescriptorHandleIncrementSize(type);
+	_base.CpuHandle = DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	if (shaderVisible) {
-		Base.GpuHandle = DescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+		_base.GpuHandle = DescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 	}
+}
+
+void DxDescriptorHeap::SetBase(DxDescriptorHandle handle) {
+	_base.CpuHandle = handle.CpuHandle;
+	_base.GpuHandle = handle.GpuHandle;
 }
 
 DxCbvSrvUavDescriptorHeap DxCbvSrvUavDescriptorHeap::Create(uint32 numDescriptors, bool shaderVisible) {
 	DxCbvSrvUavDescriptorHeap descriptorHeap;
 	descriptorHeap.Initialize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, numDescriptors, shaderVisible);
-	descriptorHeap.PushIndex = 0;
 	return descriptorHeap;
+}
+
+DxDescriptorHandle DxDescriptorRange::PushEmptyHandle() {
+	return GetHandle(_pushIndex++);
 }
 
 DxRtvDescriptorHeap DxRtvDescriptorHeap::CreateRTVDescriptorAllocator(uint32 numDescriptors) {
 	DxRtvDescriptorHeap descriptorHeap;
 	descriptorHeap.Initialize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, numDescriptors, false);
-	descriptorHeap.PushIndex = 0;
 	return descriptorHeap;
 }
 
 DxDsvDescriptorHeap DxDsvDescriptorHeap::CreateDSVDescriptorAllocator(uint32 numDescriptors) {
 	DxDsvDescriptorHeap descriptorHeap;
 	descriptorHeap.Initialize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, numDescriptors, false);
-	descriptorHeap.PushIndex = 0;
 	return descriptorHeap;
 }
 
@@ -53,7 +59,7 @@ DxDescriptorHandle DxDescriptorRange::Create2DTextureSRV(DxTexture& texture, uin
 }
 
 DxDescriptorHandle DxDescriptorRange::Push2DTextureSRV(DxTexture& texture, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
-	return Create2DTextureSRV(texture, PushIndex++, mipRange, overrideFormat);
+	return Create2DTextureSRV(texture, _pushIndex++, mipRange, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateCubemapSRV(DxTexture& texture, DxDescriptorHandle handle, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
@@ -65,7 +71,7 @@ DxDescriptorHandle DxDescriptorRange::CreateCubemapSRV(DxTexture& texture, uint3
 }
 
 DxDescriptorHandle DxDescriptorRange::PushCubemapSRV(DxTexture& texture, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
-	return CreateCubemapSRV(texture, PushIndex++, mipRange, overrideFormat);
+	return CreateCubemapSRV(texture, _pushIndex++, mipRange, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateCubemapArraySRV(DxTexture& texture, DxDescriptorHandle handle, TextureMipRange mipRange, uint32 firstCube, uint32 numCubes, DXGI_FORMAT overrideFormat) {
@@ -77,7 +83,7 @@ DxDescriptorHandle DxDescriptorRange::CreateCubemapArraySRV(DxTexture& texture, 
 }
 
 DxDescriptorHandle DxDescriptorRange::PushCubemapArraySRV(DxTexture& texture, TextureMipRange mipRange, uint32 firstCube, uint32 numCubes, DXGI_FORMAT overrideFormat) {
-	return CreateCubemapArraySRV(texture, PushIndex++, mipRange, firstCube, numCubes, overrideFormat);
+	return CreateCubemapArraySRV(texture, _pushIndex++, mipRange, firstCube, numCubes, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateDepthTextureSRV(DxTexture& texture, DxDescriptorHandle handle) {
@@ -89,7 +95,7 @@ DxDescriptorHandle DxDescriptorRange::CreateDepthTextureSRV(DxTexture& texture, 
 }
 
 DxDescriptorHandle DxDescriptorRange::PushDepthTextureSRV(DxTexture& texture) {
-	return CreateDepthTextureSRV(texture, PushIndex++);
+	return CreateDepthTextureSRV(texture, _pushIndex++);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateNullTextureSRV(DxDescriptorHandle handle) {
@@ -101,7 +107,7 @@ DxDescriptorHandle DxDescriptorRange::CreateNullTextureSRV(uint32 index) {
 }
 
 DxDescriptorHandle DxDescriptorRange::PushNullTextureSRV() {
-	return CreateNullTextureSRV(PushIndex++);
+	return CreateNullTextureSRV(_pushIndex++);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateBufferSRV(DxBuffer& buffer, DxDescriptorHandle handle, BufferRange bufferRange) {
@@ -113,7 +119,7 @@ DxDescriptorHandle DxDescriptorRange::CreateBufferSRV(DxBuffer& buffer, uint32 i
 }
 
 DxDescriptorHandle DxDescriptorRange::PushBufferSRV(DxBuffer& buffer, BufferRange bufferRange) {
-	return CreateBufferSRV(buffer, PushIndex++, bufferRange);
+	return CreateBufferSRV(buffer, _pushIndex++, bufferRange);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateRawBufferSRV(DxBuffer& buffer, DxDescriptorHandle handle, BufferRange bufferRange) {
@@ -125,7 +131,7 @@ DxDescriptorHandle DxDescriptorRange::CreateRawBufferSRV(DxBuffer& buffer, uint3
 }
 
 DxDescriptorHandle DxDescriptorRange::PushRawBufferSRV(DxBuffer& buffer, BufferRange bufferRange) {
-	return CreateRawBufferSRV(buffer, PushIndex++, bufferRange);
+	return CreateRawBufferSRV(buffer, _pushIndex++, bufferRange);
 }
 
 DxDescriptorHandle DxDescriptorRange::Create2DTextureUAV(DxTexture& texture, DxDescriptorHandle handle, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
@@ -137,7 +143,7 @@ DxDescriptorHandle DxDescriptorRange::Create2DTextureUAV(DxTexture& texture, uin
 }
 
 DxDescriptorHandle DxDescriptorRange::Push2DTextureUAV(DxTexture& texture, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
-	return Create2DTextureUAV(texture, PushIndex++, mipSlice, overrideFormat);
+	return Create2DTextureUAV(texture, _pushIndex++, mipSlice, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::Create2DTextureArrayUAV(DxTexture& texture, DxDescriptorHandle handle, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
@@ -149,7 +155,7 @@ DxDescriptorHandle DxDescriptorRange::Create2DTextureArrayUAV(DxTexture& texture
 }
 
 DxDescriptorHandle DxDescriptorRange::Push2DTextureArrayUAV(DxTexture& texture, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
-	return Create2DTextureArrayUAV(texture, PushIndex++, mipSlice, overrideFormat);
+	return Create2DTextureArrayUAV(texture, _pushIndex++, mipSlice, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateNullTextureUAV(DxDescriptorHandle handle) {
@@ -161,7 +167,7 @@ DxDescriptorHandle DxDescriptorRange::CreateNullTextureUAV(uint32 index) {
 }
 
 DxDescriptorHandle DxDescriptorRange::PushNullTextureUAV() {
-	return CreateNullTextureUAV(PushIndex++);
+	return CreateNullTextureUAV(_pushIndex++);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateBufferUAV(DxBuffer& buffer, DxDescriptorHandle handle, BufferRange bufferRange) {
@@ -173,7 +179,7 @@ DxDescriptorHandle DxDescriptorRange::CreateBufferUAV(DxBuffer& buffer, uint32 i
 }
 
 DxDescriptorHandle DxDescriptorRange::PushBufferUAV(DxBuffer& buffer, BufferRange bufferRange) {
-	return CreateBufferUAV(buffer, PushIndex++, bufferRange);
+	return CreateBufferUAV(buffer, _pushIndex++, bufferRange);
 }
 
 DxDescriptorHandle DxDescriptorRange::CreateRaytracingAccelerationStructureSRV(DxBuffer& tlas, DxDescriptorHandle handle) {
@@ -185,7 +191,7 @@ DxDescriptorHandle DxDescriptorRange::CreateRaytracingAccelerationStructureSRV(D
 }
 
 DxDescriptorHandle DxDescriptorRange::PushRaytracingAccelerationStructureSRV(DxBuffer& tlas) {
-	return CreateRaytracingAccelerationStructureSRV(tlas, PushIndex++);
+	return CreateRaytracingAccelerationStructureSRV(tlas, _pushIndex++);
 }
 
 DxDescriptorHandle DxRtvDescriptorHeap::PushRenderTargetView(DxTexture* texture) {
@@ -193,7 +199,7 @@ DxDescriptorHandle DxRtvDescriptorHeap::PushRenderTargetView(DxTexture* texture)
 	assert(resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
 	uint32 slices = resourceDesc.DepthOrArraySize;
 
-	uint32 index = AtomicAdd(PushIndex, slices);
+	uint32 index = AtomicAdd(_pushIndex, slices);
 	DxDescriptorHandle result = GetHandle(index);
 	return CreateRenderTargetView(texture, result);
 }
@@ -213,7 +219,7 @@ DxDescriptorHandle DxRtvDescriptorHeap::CreateRenderTargetView(DxTexture* textur
 
 		for (uint32 i = 0; i < slices; i++) {
 			rtvDesc.Texture2DArray.FirstArraySlice = i;
-			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(index.CpuHandle, i, DescriptorHandleIncrementSize);
+			CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(index.CpuHandle, i, _descriptorHandleIncrementSize);
 			GetDevice(DescriptorHeap)->CreateRenderTargetView(texture->Resource.Get(), &rtvDesc, rtv);
 		}
 	}
@@ -229,7 +235,7 @@ DxDescriptorHandle DxDsvDescriptorHeap::PushDepthStencilView(DxTexture* texture)
 	assert(resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 	uint32 slices = resourceDesc.DepthOrArraySize;
 
-	uint32 index = AtomicAdd(PushIndex, slices);
+	uint32 index = AtomicAdd(_pushIndex, slices);
 	DxDescriptorHandle result = GetHandle(index);
 	return CreateDepthStencilView(texture, result);
 }
@@ -258,26 +264,26 @@ DxDescriptorHandle DxDsvDescriptorHeap::CreateDepthStencilView(DxTexture* textur
 }
 
 void DxFrameDescriptorAllocator::NewFrame(uint32 bufferedFrameId) {
-	Mutex.lock();
+	_mutex.lock();
 
-	CurrentFrame = bufferedFrameId;
+	_currentFrame = bufferedFrameId;
 
-	while (UsedPages[CurrentFrame]) {
-		DxDescriptorPage* page = UsedPages[CurrentFrame];
-		UsedPages[CurrentFrame] = page->Next;
-		page->Next = FreePages;
-		FreePages = page;
+	while (_usedPages[_currentFrame]) {
+		DxDescriptorPage* page = _usedPages[_currentFrame];
+		_usedPages[_currentFrame] = page->Next;
+		page->Next = _freePages;
+		_freePages = page;
 	}
 
-	Mutex.unlock();
+	_mutex.unlock();
 }
 
 DxDescriptorRange DxFrameDescriptorAllocator::AllocateContiguousDescriptorRange(uint32 count) {
-	Mutex.lock();
+	_mutex.lock();
 
-	DxDescriptorPage* current = UsedPages[CurrentFrame];
+	DxDescriptorPage* current = _usedPages[_currentFrame];
 	if (!current or (current->MaxNumDescriptors - current->UsedDescriptors < count)) {
-		DxDescriptorPage* freePage = FreePages;
+		DxDescriptorPage* freePage = _freePages;
 		if (not freePage) {
 			freePage = (DxDescriptorPage*)calloc(1, sizeof(DxDescriptorPage));
 
@@ -286,32 +292,30 @@ DxDescriptorRange DxFrameDescriptorAllocator::AllocateContiguousDescriptorRange(
 			desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 			desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 
-			ThrowIfFailed(Device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(freePage->DescriptorHeap.GetAddressOf())));
+			ThrowIfFailed(_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(freePage->DescriptorHeap.GetAddressOf())));
 
-			freePage->DescriptorHandleIncrementSize = Device->GetDescriptorHandleIncrementSize(desc.Type);
+			freePage->DescriptorHandleIncrementSize = _device->GetDescriptorHandleIncrementSize(desc.Type);
 			freePage->Base.CpuHandle = freePage->DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 			freePage->Base.GpuHandle = freePage->DescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 		}
 
 		freePage->UsedDescriptors = 0;
 		freePage->Next = current;
-		UsedPages[CurrentFrame] = freePage;
+		_usedPages[_currentFrame] = freePage;
 		current = freePage;
 	}
 
 	uint32 index = current->UsedDescriptors;
 	current->UsedDescriptors += count;
 
-	Mutex.unlock();
+	_mutex.unlock();
 
-	DxDescriptorRange result;
-
-	result.Base.GpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(current->Base.GpuHandle, index, current->DescriptorHandleIncrementSize);
-	result.Base.CpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(current->Base.CpuHandle, index, current->DescriptorHandleIncrementSize);
-	result.DescriptorHandleIncrementSize = current->DescriptorHandleIncrementSize;
+	DxDescriptorRange result(current->MaxNumDescriptors, current->DescriptorHandleIncrementSize);
+	result.SetBase({
+		CD3DX12_CPU_DESCRIPTOR_HANDLE(current->Base.CpuHandle, index, current->DescriptorHandleIncrementSize),
+		CD3DX12_GPU_DESCRIPTOR_HANDLE(current->Base.GpuHandle, index, current->DescriptorHandleIncrementSize)
+	});
 	result.DescriptorHeap = current->DescriptorHeap;
-	result.MaxNumDescriptors = count;
-	result.PushIndex = 0;
 
 	return result;
 }

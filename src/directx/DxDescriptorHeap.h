@@ -23,27 +23,34 @@ class DxDescriptorHeap {
 public:
 	Com<ID3D12DescriptorHeap> DescriptorHeap;
 	D3D12_DESCRIPTOR_HEAP_TYPE Type;
-
-	DxDescriptorHandle Base;
-
-	uint32 MaxNumDescriptors;
-	uint32 DescriptorHandleIncrementSize;
+	DxDescriptorHeap() = default;
+	DxDescriptorHeap(uint32 maxNumDescriptors, uint32 descriptorHandleIncrementSize) :
+	_maxNumDescriptors(maxNumDescriptors), _descriptorHandleIncrementSize(descriptorHandleIncrementSize) {}
 
 	[[nodiscard]] DxDescriptorHandle GetHandle(const uint32 index) const {
-		assert(index < MaxNumDescriptors);
+		assert(index < _maxNumDescriptors);
 
-		const CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(Base.GpuHandle, index, DescriptorHandleIncrementSize);
-		const CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(Base.CpuHandle, index, DescriptorHandleIncrementSize);
+		const CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(_base.GpuHandle, index, _descriptorHandleIncrementSize);
+		const CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(_base.CpuHandle, index, _descriptorHandleIncrementSize);
 
 		return {.CpuHandle = cpuHandle, .GpuHandle = gpuHandle };
 	}
+	void SetBase(DxDescriptorHandle handle);
+
 protected:
 	void Initialize(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors, bool shaderVisible);
+
+	uint32 _maxNumDescriptors = 0;
+	uint32 _descriptorHandleIncrementSize = 0;
+	DxDescriptorHandle _base = {};
 };
 
 class DxDescriptorRange : public DxDescriptorHeap {
 public:
-	uint32 PushIndex;
+	DxDescriptorRange() = default;
+	DxDescriptorRange(uint32 maxNumDescriptors, uint32 descriptorHandleIncrementSize) : DxDescriptorHeap(maxNumDescriptors, descriptorHandleIncrementSize) {}
+
+	DxDescriptorHandle PushEmptyHandle();
 
 	DxDescriptorHandle Create2DTextureSRV(DxTexture& texture, DxDescriptorHandle handle, TextureMipRange mipRange = {}, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN);
 	DxDescriptorHandle Create2DTextureSRV(DxTexture& texture, uint32 index, TextureMipRange mipRange = {}, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN);
@@ -92,6 +99,9 @@ public:
 	DxDescriptorHandle CreateRaytracingAccelerationStructureSRV(DxBuffer& tlas, DxDescriptorHandle handle);
 	DxDescriptorHandle CreateRaytracingAccelerationStructureSRV(DxBuffer& tlas, uint32 index);
 	DxDescriptorHandle PushRaytracingAccelerationStructureSRV(DxBuffer& tlas);
+
+protected:
+	uint32 _pushIndex = 0;
 };
 
 class DxCbvSrvUavDescriptorHeap : public DxDescriptorRange {
@@ -112,34 +122,41 @@ struct DxDescriptorPage {
 class DxFrameDescriptorAllocator {
 public:
 	DxFrameDescriptorAllocator() = default;
-	DxDevice Device = nullptr;
-
-	DxDescriptorPage* UsedPages[NUM_BUFFERED_FRAMES] = {};
-	DxDescriptorPage* FreePages = nullptr;
-	uint32 CurrentFrame = NUM_BUFFERED_FRAMES - 1;
-
-	std::mutex Mutex = {};
 
 	void NewFrame(uint32 bufferedFrameId);
+	void SetDevice(DxDevice device) {
+		_device = device;
+	}
+
 	DxDescriptorRange AllocateContiguousDescriptorRange(uint32 count);
+
+protected:
+	DxDevice _device = nullptr;
+
+	std::mutex _mutex = {};
+	DxDescriptorPage* _usedPages[NUM_BUFFERED_FRAMES] = {};
+	DxDescriptorPage* _freePages = nullptr;
+	uint32 _currentFrame = NUM_BUFFERED_FRAMES - 1;
 };
 
 class DxRtvDescriptorHeap : public DxDescriptorHeap {
 public:
-	volatile uint32 PushIndex;
-
 	DxDescriptorHandle PushRenderTargetView(DxTexture* texture);
 	DxDescriptorHandle CreateRenderTargetView(DxTexture* texture, DxDescriptorHandle index);
 
 	static DxRtvDescriptorHeap CreateRTVDescriptorAllocator(uint32 numDescriptors);
+
+private:
+	volatile uint32 _pushIndex = 0;
 };
 
 class DxDsvDescriptorHeap : public DxDescriptorHeap {
 public:
-	volatile uint32 PushIndex;
-
 	DxDescriptorHandle PushDepthStencilView(DxTexture* texture);
 	DxDescriptorHandle CreateDepthStencilView(DxTexture* texture, DxDescriptorHandle index);
 
 	static DxDsvDescriptorHeap CreateDSVDescriptorAllocator(uint32 numDescriptors);
+
+private:
+	volatile uint32 _pushIndex = 0;
 };

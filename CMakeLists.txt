@@ -7,10 +7,13 @@ if(NOT MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-narrowing -Wno-sign-compare -Wno-unused-variable")
 endif ()
 message(${CMAKE_CXX_FLAGS})
-include(FetchContent)
 include(scripts/functions.cmake)
 
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
+find_package(directxtex CONFIG REQUIRED)
+find_package(assimp CONFIG REQUIRED)
+find_package(entt CONFIG REQUIRED)
 
 set(src_files "")
 set(local_libs_dir "")
@@ -43,30 +46,6 @@ foreach (dir_name ${src_dirs})
     endforeach ()
 endforeach ()
 
-set(GLM_TAG master)
-FetchContent_Declare(
-    glm
-    GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG ${GLM_TAG}
-)
-FetchContent_MakeAvailable(glm)
-
-set(ASSIMP_TAG master)
-FetchContent_Declare(
-    assimp
-    GIT_REPOSITORY https://github.com/assimp/assimp.git
-    GIT_TAG ${ASSIMP_TAG}
-)
-FetchContent_MakeAvailable(assimp)
-
-set(ENTT_TAG master)
-FetchContent_Declare(
-    entt
-    GIT_REPOSITORY https://github.com/skypjack/entt.git
-    GIT_TAG ${ENTT_TAG}
-)
-FetchContent_MakeAvailable(entt)
-
 if(WIN32)
     add_link_options(
             /SUBSYSTEM:WINDOWS
@@ -81,7 +60,11 @@ if(WIN32)
     target_compile_options(${PROJECT_NAME} INTERFACE /arch:SSE4.1)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
     target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE dxgi d3d12 dxguid d3dcompiler runtimeobject assimp)
+    target_link_libraries(${PROJECT_NAME} PRIVATE dxgi d3d12 dxguid d3dcompiler runtimeobject
+            assimp::assimp
+            EnTT::EnTT
+            Microsoft::DirectXTex
+    )
     target_include_directories(${PROJECT_NAME} PRIVATE ${shaders_dir}/common ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
     ${CMAKE_CURRENT_BINARY_DIR}/_deps/entt-src)
 else ()

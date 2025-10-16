@@ -3,8 +3,9 @@
 #include "DxPipeline.h"
 #include "DxRenderPrimitives.h"
 #include "DxRenderTarget.h"
-#include "present_rs.hlsli"
 #include "../core/camera.h"
+
+#include "present_rs.hlsli"
 
 class DxRenderer {
 public:
@@ -18,13 +19,11 @@ public:
 	void BeginFrame(uint32 width, uint32 height);
 	void BeginFrame(CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle, DxResource renderTarget);
 	
-	int DummyRender();
+	int DummyRender(float dt);
 
 	DxCbvSrvUavDescriptorHeap GlobalDescriptorHeap;
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE BackBufferRtv;
-	DxResource CurrentBackBuffer;	
-
+	CD3DX12_CPU_DESCRIPTOR_HANDLE Rtv;
 	DxTexture FrameResult;
 	DxTexture DepthBuffer;
 
@@ -45,5 +44,9 @@ private:
 	DxPipeline _presentPipeline;
 	DxPipeline _modelPipeline;
 	D3D12_VIEWPORT _viewport;
+
+	DxTexture _texture;
+	DxDescriptorHandle _textureHandle;
+
 	float _clearColor[4];
 };

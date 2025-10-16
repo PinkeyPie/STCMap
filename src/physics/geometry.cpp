@@ -1,6 +1,7 @@
 #include "geometry.h"
+#include "memory.h"
 
-#include <valarray>
+#include "assimp/scene.h"
 
 struct VertexInfo {
 	uint32 VertexSize;
@@ -394,6 +395,66 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 	result.NumVertices = NumVertices - baseVertex;
 	return result;
 }
+
+SubmeshInfo CpuMesh::PushAssimpMesh(const struct aiMesh* mesh, float scale, AABBCollider *aabb) {
+	AlignNextTriangle();
+
+	uint32 baseVertex = NumVertices;
+	uint32 firstTriangle = NumTriangles;
+
+	assert(mesh->mNumVertices <= UINT16_MAX);
+
+	Reserve(mesh->mNumVertices, mesh->mNumFaces);
+
+	uint8* vertexPtr = Vertices + VertexSize * NumVertices;
+
+	vec3 position(0.f, 0.f, 0.f);
+	vec3 normal(0.f,0.f,0.f);
+	vec3 tangent(0.f,0.f,0.f);
+	vec2 uv(0.f,0.f);
+
+	bool hasPositions = mesh->HasPositions();
+	bool hasNormals = mesh->HasNormals();
+	bool hasTangents = mesh->HasTangentsAndBitangents();
+	bool hasUVs = mesh->HasTextureCoords(0);
+
+	if (aabb) {
+		*aabb = AABBCollider::NegativeInfinity();
+	}
+
+	for (uint32 i = 0; i < mesh->mNumVertices; i++) {
+		if (hasPositions) {
+			position = vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z) * scale;
+			if (aabb) {
+				aabb->Grow(position);
+			}
+		}
+		if (hasNormals) {
+			normal = vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z);
+		}
+		if (hasTangents) {
+			tangent = vec3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
+		}
+		if (hasUVs) {
+			uv = vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y);
+		}
+
+		PushVertex(position, uv, normal, tangent, {});
+	}
+
+	for (uint32 i = 0; i < mesh->mNumFaces; i++) {
+		const aiFace& face = mesh->mFaces[i];
+		PushTriangle(face.mIndices[0], face.mIndices[1], face.mIndices[2]);
+	}
+
+	SubmeshInfo result;
+	result.FirstTriangle = firstTriangle;
+	result.NumTriangles = mesh->mNumFaces;
+	result.BaseVertex = baseVertex;
+	result.NumVertices = mesh->mNumVertices;
+	return result;
+}
+
 
 DxMesh CpuMesh::CreateDxMesh() const {
 	DxMesh result;

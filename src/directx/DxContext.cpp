@@ -16,6 +16,12 @@ namespace {
 		ThrowIfFailed(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5)));
 		return options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0;
 	}
+
+	bool CheckMeshShaderSupport(DxDevice device) {
+		D3D12_FEATURE_DATA_D3D12_OPTIONS7 options7 = {};
+		ThrowIfFailed(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS7, &options7, sizeof(options7)));
+		return options7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1;
+	}
 }
 
 void DxContext::CreateFactory() {
@@ -24,7 +30,7 @@ void DxContext::CreateFactory() {
 	createFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
-	ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(Factory.GetAddressOf())));
+	ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(_factory.GetAddressOf())));
 }
 
 void DxContext::CreateAdapter() {
@@ -32,7 +38,7 @@ void DxContext::CreateAdapter() {
 	DxAdapter dxgiAdapter;
 
 	size_t maxDedicatedVideoMemory = 0;
-	for (uint32 i = 0; Factory->EnumAdapters1(i, dxgiAdapter1.GetAddressOf()) != DXGI_ERROR_NOT_FOUND; i++) {
+	for (uint32 i = 0; _factory->EnumAdapters1(i, dxgiAdapter1.GetAddressOf()) != DXGI_ERROR_NOT_FOUND; i++) {
 		DXGI_ADAPTER_DESC1 dxgiAdapterDesc1;
 		dxgiAdapter1->GetDesc1(&dxgiAdapterDesc1);
 
@@ -48,15 +54,15 @@ void DxContext::CreateAdapter() {
 		}
 	}
 
-	Adapter = dxgiAdapter;
+	_adapter = dxgiAdapter;
 }
 
 void DxContext::CreateDevice() {
-	ThrowIfFailed(D3D12CreateDevice(Adapter.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(Device.GetAddressOf())));
+	ThrowIfFailed(D3D12CreateDevice(_adapter.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(_device.GetAddressOf())));
 
-#ifdef F
+#ifdef _DEBUG
 	Com<ID3D12InfoQueue> infoQueue;
-	if (SUCCEEDED(Device.As(&infoQueue))) {
+	if (SUCCEEDED(_device.As(&infoQueue))) {
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
@@ -95,23 +101,24 @@ void DxContext::Initialize() {
 	CreateAdapter();
 	CreateDevice();
 
-	RaytracingSupported = CheckRaytracingSupport(Device);
+	_raytracingSupported = CheckRaytracingSupport(_device);
+	_meshShaderSupported = CheckMeshShaderSupport(_device);
 
-	Arena.MinimumBlockSize = MB(2);
-	BufferedFrameId = NUM_BUFFERED_FRAMES - 1;
+	_arena.MinimumBlockSize = MB(2);
+	_bufferFrameId = NUM_BUFFERED_FRAMES - 1;
 
 	for (uint32 i = 0; i < NUM_BUFFERED_FRAMES; i++) {
-		PagePools[i].Device = Device;
-		PagePools[i].PageSize = MB(2);
+		_pagePools[i].Device = _device;
+		_pagePools[i].PageSize = MB(2);
 	}
 
-	RenderQueue.Initialize(Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-	ComputeQueue.Initialize(Device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	CopyQueue.Initialize(Device, D3D12_COMMAND_LIST_TYPE_COPY);
+	RenderQueue.Initialize(_device);
+	ComputeQueue.Initialize(_device);
+	CopyQueue.Initialize(_device);
 
-	RtvAllocator = DxRtvDescriptorHeap::CreateRTVDescriptorAllocator(1024);
-	DsvAllocator = DxDsvDescriptorHeap::CreateDSVDescriptorAllocator(1024);
-	FrameDescriptorAllocator.Device = Device;
+	_rtvAllocator = DxRtvDescriptorHeap::CreateRTVDescriptorAllocator(1024);
+	_dsvAllocator = DxDsvDescriptorHeap::CreateDSVDescriptorAllocator(1024);
+	_frameDescriptorAllocator.SetDevice(_device);
 }
 
 void DxContext::FlushApplication() {
@@ -121,34 +128,34 @@ void DxContext::FlushApplication() {
 }
 
 void DxContext::Quit() {
-	Running = false;
+	_running = false;
 	FlushApplication();
-	RenderQueue.ProcessThread.join();
-	ComputeQueue.ProcessThread.join();
-	CopyQueue.ProcessThread.join();
+	RenderQueue.LeaveThread();
+	ComputeQueue.LeaveThread();
+	CopyQueue.LeaveThread();
 }
 
 DxCommandList* DxContext::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type) {
-	AllocationMutex.lock();
-	DxCommandList* result = static_cast<DxCommandList*>(Arena.Allocate(sizeof(DxCommandList), true));
-	AllocationMutex.unlock();
+	_allocationMutex.lock();
+	auto result = static_cast<DxCommandList*>(_arena.Allocate(sizeof(DxCommandList), true));
+	_allocationMutex.unlock();
 
 	result->Type = type;
 
 	DxCommandAllocator* allocator = GetFreeCommandAllocator(type);
 	result->CommandAllocator = allocator;
 
-	ThrowIfFailed(Device->CreateCommandList(0, type, allocator->CommandAllocator.Get(), nullptr, IID_PPV_ARGS(result->CommandList.GetAddressOf())))
+	ThrowIfFailed(_device->CreateCommandList(0, type, allocator->CommandAllocator.Get(), nullptr, IID_PPV_ARGS(result->CommandList.GetAddressOf())))
 
 	return result;
 }
 
 DxCommandAllocator* DxContext::AllocateCommandAllocator(D3D12_COMMAND_LIST_TYPE type) {
-	AllocationMutex.lock();
-	DxCommandAllocator* result = static_cast<DxCommandAllocator*>(Arena.Allocate(sizeof(DxCommandAllocator), true));
-	AllocationMutex.unlock();
+	_allocationMutex.lock();
+	auto result = static_cast<DxCommandAllocator*>(_arena.Allocate(sizeof(DxCommandAllocator), true));
+	_allocationMutex.unlock();
 
-	ThrowIfFailed(Device->CreateCommandAllocator(type, IID_PPV_ARGS(result->CommandAllocator.GetAddressOf())));
+	ThrowIfFailed(_device->CreateCommandAllocator(type, IID_PPV_ARGS(result->CommandAllocator.GetAddressOf())));
 
 	return result;
 }
@@ -160,12 +167,7 @@ DxCommandQueue& DxContext::GetQueue(D3D12_COMMAND_LIST_TYPE type) {
 }
 
 DxCommandList* DxContext::GetFreeCommandList(DxCommandQueue& queue) {
-	queue.CommandListMutex.lock();
-	DxCommandList* result = queue.FreeCommandLists;
-	if (result) {
-		queue.FreeCommandLists = result->Next;
-	}
-	queue.CommandListMutex.unlock();
+	DxCommandList* result = queue.GetFreeCommandList();
 
 	if (!result) {
 		result = AllocateCommandList(queue.CommandListType);
@@ -175,8 +177,8 @@ DxCommandList* DxContext::GetFreeCommandList(DxCommandQueue& queue) {
 		result->Reset(allocator);
 	}
 
-	result->UsedLastOnFrame = FrameId;
-	result->UploadBuffer.PagePool = &PagePools[BufferedFrameId];
+	result->UsedLastOnFrame = _frameId;
+	result->UploadBuffer.PagePool = &_pagePools[_bufferFrameId];
 
 	return result;
 }
@@ -194,18 +196,10 @@ DxCommandList* DxContext::GetFreeRenderCommandList() {
 }
 
 DxCommandAllocator* DxContext::GetFreeCommandAllocator(DxCommandQueue& queue) {
-	queue.CommandListMutex.lock();
-	DxCommandAllocator* result = queue.FreeCommandAllocators;
-	if (result) {
-		queue.FreeCommandAllocators = result->Next;
-	}
-	queue.CommandListMutex.unlock();
+	DxCommandAllocator* result = queue.GetFreeCommandAllocator();
 
 	if (!result) {
 		result = AllocateCommandAllocator(queue.CommandListType);
-	}
-	if (!result->CommandAllocator) {
-		ThrowIfFailed(Device->CreateCommandAllocator(queue.CommandListType, IID_PPV_ARGS(result->CommandAllocator.GetAddressOf())));
 	}
 	return result;
 }
@@ -218,48 +212,44 @@ DxCommandAllocator* DxContext::GetFreeCommandAllocator(D3D12_COMMAND_LIST_TYPE t
 uint64 DxContext::ExecuteCommandList(DxCommandList* commandList) {
 	DxCommandQueue& queue = GetQueue(commandList->Type);
 
-	ThrowIfFailed(commandList->CommandList->Close());
-
-	ID3D12CommandList* d3d12List = commandList->CommandList.Get();
-	queue.CommandQueue->ExecuteCommandLists(1, &d3d12List);
-
-	uint64 fenceValue = queue.Signal();
-
-	DxCommandAllocator* allocator = commandList->CommandAllocator;
-	allocator->LastExecutionFenceValue = fenceValue;
-
-	queue.CommandListMutex.lock();
-
-	allocator->Next = queue.RunningCommandAllocators;
-	queue.RunningCommandAllocators = allocator;
-	AtomicIncrement(queue.NumRunningCommandAllocators);
-
-	commandList->Next = queue.FreeCommandLists;
-	queue.FreeCommandLists = commandList;
-
-	queue.CommandListMutex.unlock();
-
-	return fenceValue;
+	return queue.Execute(commandList);
 }
 
 void DxContext::RetireObject(DxObject object) {
 	if (object) {
-		uint32 index = AtomicIncrement(ObjectRetirement.NumRetireObjects[BufferedFrameId]);
-		assert(!ObjectRetirement.RetiredObjects[BufferedFrameId][index]);
-		ObjectRetirement.RetiredObjects[BufferedFrameId][index] = object;
+		uint32 index = AtomicIncrement(_objectRetirement.NumRetireObjects[_bufferFrameId]);
+		assert(!_objectRetirement.RetiredObjects[_bufferFrameId][index]);
+		_objectRetirement.RetiredObjects[_bufferFrameId][index] = object;
 	}
 }
 
 void DxContext::NewFrame(uint64 frameId) {
-	FrameId = frameId;
+	_frameId = frameId;
 
-	BufferedFrameId = (uint32)(frameId % NUM_BUFFERED_FRAMES);
-	for (uint32 i = 0; i < ObjectRetirement.NumRetireObjects[BufferedFrameId]; i++) {
-		ObjectRetirement.RetiredObjects[BufferedFrameId][i].Reset();
+	_bufferFrameId = (uint32)(frameId % NUM_BUFFERED_FRAMES);
+	for (uint32 i = 0; i < _objectRetirement.NumRetireObjects[_bufferFrameId]; i++) {
+		_objectRetirement.RetiredObjects[_bufferFrameId][i].Reset();
 	}
-	ObjectRetirement.NumRetireObjects[BufferedFrameId] = 0;
+	_objectRetirement.NumRetireObjects[_bufferFrameId] = 0;
 
-	PagePools[BufferedFrameId].Reset();
-	FrameDescriptorAllocator.NewFrame(BufferedFrameId);
+	_pagePools[_bufferFrameId].Reset();
+	_frameDescriptorAllocator.NewFrame(_bufferFrameId);
+}
+
+bool DxContext::CheckTearingSupport() {
+	BOOL allowTearing  = FALSE;
+
+	// Rather than create the DXGI 1.5 factory interface directly, we create the
+	// DXGI 1.4 interface and query for the 1.5 interface. This is to enable the
+	// graphics debugging tools which will not support the 1.5 factory interface
+	// until a future update.
+	Com<IDXGIFactory5> factory5;
+	if (SUCCEEDED(_factory.As(&factory5))) {
+		if (FAILED(factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing)))) {
+			allowTearing = FALSE;
+		}
+	}
+
+	return allowTearing == TRUE;
 }
 

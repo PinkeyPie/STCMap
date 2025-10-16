@@ -9,28 +9,34 @@ class DxCommandAllocator;
 
 class DxCommandQueue {
 public:
-	void Initialize(DxDevice device, D3D12_COMMAND_LIST_TYPE type);
+	const D3D12_COMMAND_LIST_TYPE CommandListType;
+	Com<ID3D12CommandQueue> NativeQueue = nullptr;
+
+	DxCommandQueue(const D3D12_COMMAND_LIST_TYPE type) : CommandListType(type) {}
+
+	void Initialize(DxDevice device);
 
 	uint64 Signal();
-	bool IsFenceComplete(uint64 fenceValue);
-	void WaitForFence(uint64 fenceValue);
-	void WaitForOtherQueue(DxCommandQueue& other);
+	bool IsFenceComplete(uint64 fenceValue) const;
+	void WaitForFence(uint64 fenceValue) const;
+	void WaitForOtherQueue(DxCommandQueue& other) const;
 	void Flush();
-
-	D3D12_COMMAND_LIST_TYPE CommandListType;
-	Com<ID3D12CommandQueue> CommandQueue;
-	Com<ID3D12Fence> Fence;
-	volatile uint64 FenceValue;
-
-	DxCommandAllocator* RunningCommandAllocators;
-	DxCommandAllocator* FreeCommandAllocators;
-	volatile uint32 NumRunningCommandAllocators;
-
-	DxCommandList* FreeCommandLists;
-
-	std::thread ProcessThread;
-	std::mutex CommandListMutex = {};
+	void LeaveThread();
+	DxCommandList* GetFreeCommandList();
+	DxCommandAllocator* GetFreeCommandAllocator();
+	uint64 Execute(DxCommandList* commandList);
 
 private:
 	void ProcessRunningCommandAllocators();
+
+	DxCommandAllocator* _runningCommandAllocators = nullptr;
+	DxCommandAllocator* _freeCommandAllocators = nullptr;
+	volatile uint32 _numRunningCommandAllocators = 0;
+	DxCommandList* _freeCommandLists = nullptr;
+
+	std::mutex _mutex = {};
+	std::thread _freeAllocThread = {};
+
+	Com<ID3D12Fence> _fence = nullptr;
+	volatile uint64 _fenceValue = 0;
 };

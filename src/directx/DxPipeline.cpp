@@ -82,7 +82,6 @@ DxPipeline DxPipelineFactory::CreateReloadablePipeline(const D3D12_GRAPHICS_PIPE
 	_pipelines.emplace_back();
 	auto& state = _pipelines.back();
 
-	ReloadableRootSignature* reloadableRs = PushBlob(files.Rs, &state, true);
 	PushBlob(files.Vs, &state);
 	PushBlob(files.Ps, &state);
 	PushBlob(files.Gs, &state);
@@ -150,7 +149,7 @@ void DxPipelineFactory::LoadPipeline(ReloadablePipelineState& p) {
 
 	p.Desc.pRootSignature = p.RootSignature->Get();
 	dxContext.RetireObject(p.Pipeline);
-	ThrowIfFailed(dxContext.Device->CreateGraphicsPipelineState(&p.Desc, IID_PPV_ARGS(p.Pipeline.GetAddressOf())));
+	ThrowIfFailed(dxContext.GetDevice()->CreateGraphicsPipelineState(&p.Desc, IID_PPV_ARGS(p.Pipeline.GetAddressOf())));
 }
 
 void DxPipelineFactory::CreateAllReloadablePipelines() {

@@ -32,7 +32,7 @@ public:
 
 	DxPipelineState Create() {
 		DxPipelineState result;
-		ThrowIfFailed(DxContext::Instance().Device->CreateGraphicsPipelineState(&Desc, IID_PPV_ARGS(result.GetAddressOf())));
+		ThrowIfFailed(DxContext::Instance().GetDevice()->CreateGraphicsPipelineState(&Desc, IID_PPV_ARGS(result.GetAddressOf())));
 		return result;
 	}
 
@@ -192,7 +192,7 @@ public:
 
 	DxPipelineState Create() {
 		DxPipelineState result;
-		ThrowIfFailed(DxContext::Instance().Device->CreateComputePipelineState(&Desc, IID_PPV_ARGS(result.GetAddressOf())));
+		ThrowIfFailed(DxContext::Instance().GetDevice()->CreateComputePipelineState(&Desc, IID_PPV_ARGS(result.GetAddressOf())));
 		return result;
 	}
 
@@ -214,7 +214,6 @@ public:
 };
 
 struct GraphicsPipelineFiles {
-	const char* Rs = nullptr;
 	const char* Vs = nullptr;
 	const char* Ps = nullptr;
 	const char* Ds = nullptr;

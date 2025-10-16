@@ -17,6 +17,7 @@ public:
 	virtual void Shutdown();
 	virtual void SwapBuffers();
 	virtual void ResizeHandle();
+	void ToggleVSync();
 	
 	PCTCH ClassName() const override;
 	LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
@@ -53,6 +54,7 @@ private:
 	bool _vSync = false;
 	bool _open = true;
 	bool _initialized = false;
+	bool _sizing = false;
 
 	void CreateSwapchain(const DxCommandQueue& commandQueue);
 	void CheckForHdrSupport();

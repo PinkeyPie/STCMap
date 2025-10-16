@@ -20,7 +20,7 @@ void DxBuffer::Upload(const void* bufferData) {
 
 	D3D12_HEAP_PROPERTIES heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	D3D12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(TotalSize);
-	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.GetDevice()->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
@@ -55,7 +55,7 @@ void DxBuffer::UpdateDataRange(const void* data, uint32 offset, uint32 size) {
 
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_GPU_UPLOAD);
 	auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(size);
-	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.GetDevice()->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
@@ -89,7 +89,7 @@ void DxBuffer::Initialize(uint32 elementSize, uint32 elementCount, void* data, b
 
 	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(heapType);
 	const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(TotalSize, flags);
-	ThrowIfFailed(dxContext.Device->CreateCommittedResource(
+	ThrowIfFailed(dxContext.GetDevice()->CreateCommittedResource(
 		&heapProperties,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
