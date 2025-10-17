@@ -5,7 +5,32 @@
 #include "DxRenderTarget.h"
 #include "../core/camera.h"
 
+#include "math.h"
 #include "present_rs.hlsli"
+
+enum AspectRatioMode {
+	EAspectRatioFree,
+	EAspectRatioFix16_9,
+	EAspectRatioFix16_10,
+
+	EAspectRatioModeCount
+};
+
+static const char* aspectRatioNames[] = {
+	"Free",
+	"16:9",
+	"16:10"
+};
+
+struct PbrEnvironment {
+	DxTexture Sky;
+	DxTexture Prefiltered;
+	DxTexture Irradiance;
+
+	DxDescriptorHandle SkyHandle;
+	DxDescriptorHandle PrefilteredHandle;
+	DxDescriptorHandle IrradianceHandle;
+};
 
 class DxRenderer {
 public:
@@ -18,7 +43,7 @@ public:
 
 	void BeginFrame(uint32 width, uint32 height);
 	void BeginFrame(CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle, DxResource renderTarget);
-	
+	void RecalculateViewport(bool resizeTextures);
 	int DummyRender(float dt);
 
 	DxCbvSrvUavDescriptorHeap GlobalDescriptorHeap;
@@ -27,10 +52,7 @@ public:
 	DxTexture FrameResult;
 	DxTexture DepthBuffer;
 
-	DxRenderTarget RenderTarget;
-
-	uint32 RenderWidth;
-	uint32 RenderHeight;
+	DxRenderTarget HdrRenderTarget;
 
 private:
 	static DxRenderer* _instance;
@@ -41,12 +63,28 @@ private:
 
 	TonemapCb _tonemap = DefaultTonemapParameters();
 
-	DxPipeline _presentPipeline;
-	DxPipeline _modelPipeline;
 	D3D12_VIEWPORT _viewport;
 
-	DxTexture _texture;
-	DxDescriptorHandle _textureHandle;
+	DxTexture _hdrColorTexture;
+	DxDescriptorHandle _hdrColorTextureSrv;
+
+	uint32 _renderWidth;
+	uint32 _renderHeight;
+	uint32 _windowWidth;
+	uint32 _windowHeight;
+
+	DxRenderTarget _windowRenderTarget;
+	DxDescriptorHandle _frameResultSrv;
+	DxTexture _frameResult;
+
+	D3D12_VIEWPORT _windowViewport;
+
+	AspectRatioMode _aspectRatioMode;
+
+	DxPipeline _textureSkyPipeline;
+	DxPipeline _proceduralSkyPipeline;
+	DxPipeline _presentPipeline;
+	DxPipeline _modelPipeline;
 
 	float _clearColor[4];
 };

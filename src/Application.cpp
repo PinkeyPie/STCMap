@@ -235,7 +235,7 @@ bool Application::HandleWindowsMessages() {
 }
 
 uint64 Application::RenderToWindow(float* clearColor) {
-	DxResource frameResult = DxRenderer::Instance()->RenderTarget.ColorAttachments[0];
+	DxResource frameResult = DxRenderer::Instance()->HdrRenderTarget.ColorAttachments[0];
 	DxResource backBuffer = _mainWindow.GetCurrentBackBuffer();
 	
 	DxCommandList* cl = DxContext::Instance().GetFreeRenderCommandList();

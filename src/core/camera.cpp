@@ -1,13 +1,17 @@
 #include "camera.h"
 
-void RenderCamera::RecalculateMatrices(uint32 renderWidth, uint32 renderHeight) {
-	float aspect = (float)renderWidth / (float)renderHeight;
+void RenderCamera::RecalculateMatrices(float renderWidth, float renderHeight) {
+	const float aspect = renderWidth / renderHeight;
 	Proj = CreatePerspectiveProjectionMatrix(VerticalFOV, aspect, NearPlane, FarPlane);
 	InvProj = InvertPerspectiveProjectionMatrix(Proj);
 	View = CreateViewMatrix(Position, Rotation);
 	InvView = InvertedAffine(View);
 	ViewProj = Proj * View;
 	InvViewProj = InvView * InvProj;
+}
+
+void RenderCamera::RecalculateMatrices(uint32 renderWidth, uint32 renderHeight) {
+	return RecalculateMatrices((float)renderWidth, (float)renderHeight);
 }
 
 Ray CameraBase::GenerateWorldSpaceRay(float relX, float relY) const {

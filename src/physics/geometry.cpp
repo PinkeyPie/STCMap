@@ -251,8 +251,8 @@ SubmeshInfo CpuMesh::PushSphere(uint16 slices, uint16 rows, float radius) {
 	assert(slices > 2);
 	assert(rows > 0);
 
-	float vertDeltaAngle = M_PI / (rows + 1);
-	float horzDeltaAngle = 2.f * M_PI / slices;
+	float vertDeltaAngle = PI / (rows + 1);
+	float horzDeltaAngle = 2.f * PI / slices;
 
 	assert(slices * rows + 2 <= UINT16_MAX);
 
@@ -262,7 +262,7 @@ SubmeshInfo CpuMesh::PushSphere(uint16 slices, uint16 rows, float radius) {
 	PushVertex(vec3(0.f, -radius, 0.f), DirectionToPanoramaUv(vec3(0.f, -1.f, 0.f)), vec3(0.f, -1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
 
 	for (uint32 y = 0; y < rows; y++) {
-		float vertAngle = (y + 1) * vertDeltaAngle - M_PI;
+		float vertAngle = (y + 1) * vertDeltaAngle - PI;
 		float vertexY = cosf(vertAngle);
 		float currentCirceRadius = sinf(vertAngle);
 		for (uint32 x = 0; x < slices; x++) {
@@ -318,8 +318,8 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 	assert(rows > 0);
 	assert(rows % 2 == 1);
 
-	float vertDeltaAngle = M_PI / (rows + 1);
-	float horzDeltaAngle = 2.f * M_PI / slices;
+	float vertDeltaAngle = PI / (rows + 1);
+	float horzDeltaAngle = 2.f * PI / slices;
 	float halfHeight = 0.5f * height;
 	float texStretch = radius / (radius + halfHeight);
 
@@ -333,7 +333,7 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 	PushVertex(vec3(0.f, -radius - halfHeight, 0.f), DirectionToPanoramaUv(vec3(0.f, -1.f, 0.f)), vec3(0.f, -1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
 
 	for (uint32 y = 0; y < rows / 2u + 1u; y++) {
-		float vertAngle = (y + 1) * vertDeltaAngle - M_PI;
+		float vertAngle = (y + 1) * vertDeltaAngle - PI;
 		float vertexY = cosf(vertAngle);
 		float currentCircleRadius = sinf(vertAngle);
 		for (uint32 x = 0; x < slices; x++) {
@@ -349,7 +349,7 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 		}
 	}
 	for (uint32 y = 0; y < rows / 2u + 1u; y++) {
-		float vertAngle = (y + rows / 2 + 1) * vertDeltaAngle - M_PI;
+		float vertAngle = (y + rows / 2 + 1) * vertDeltaAngle - PI;
 		float vertexY = cosf(vertAngle);
 		float currentCircleRadius = sinf(vertAngle);
 		for (uint32 x = 0; x < slices; x++) {

@@ -4,17 +4,24 @@
 #include "DxDescriptorHeap.h"
 #include "DxContext.h"
 
-enum TextureLoadFlags {
-	ETextureLoadFlagsNone = 0,
-	ETextureLoadFlagsNoncolor = 1 << 0,
-	ETextureLoadFlagsCompressBc3 = 1 << 1,
-	ETextureLoadFlagsGenMipsOnCpu = 1 << 2,
-	ETextureLoadFlagsAllocateFullMipChain = 1 << 3, // Use if you want to create the mip chain on the GPU
-	ETextureLoadFlagsPremultiplyAlpha = 1 << 4,
-	ETextureLoadFlagsCacheToDds = 1 << 5,
-	ETextureLoadFlagsAlwaysLoadFromSource = 1 << 6, // By default the system will always try to load a cached version of the texture. You can prevent this with this flag.
+// If the TextureLoadFlags flags is set, the system will cache the texture as DDS to disk for faster loading next time.
+// This is not done if the original file has a newer write time.
+// It is also not done if the cache was created with different flags.
+// Therefore: If you change these flags, delete the texture cache!
 
-	ETextureLoadFlagsDefault = ETextureLoadFlagsCompressBc3 | ETextureLoadFlagsGenMipsOnCpu | ETextureLoadFlagsCacheToDds,
+// If you want the mip chain to be computed on the GPU, you must call this yourself. This system only supports CPU mip levels for now.
+
+enum TextureLoadFlags {
+	ETextureLoadFlagsNone					= 0,
+	ETextureLoadFlagsNoncolor				= (1 << 0),
+	ETextureLoadFlagsCompress				= (1 << 1),
+	ETextureLoadFlagsGenMipsOnCpu			= (1 << 2),
+	ETextureLoadFlagsAllocateFullMipChain	= (1 << 3), // Use if you want to create the mip chain on the GPU
+	ETextureLoadFlagsPremultiplyAlpha		= (1 << 4),
+	ETextureLoadFlagsCacheToDds				= (1 << 5),
+	ETextureLoadFlagsAlwaysLoadFromSource	= (1 << 6), // By default the system will always try to load a cached version of the texture. You can prevent this with this flag.
+
+	ETextureLoadFlagsDefault = ETextureLoadFlagsCompress | ETextureLoadFlagsGenMipsOnCpu | ETextureLoadFlagsCacheToDds,
 };
 
 class DxTexture {

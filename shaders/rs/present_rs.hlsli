@@ -1,7 +1,7 @@
 #ifndef PRESENT_RS_HLSLI
 #define PRESENT_RS_HLSLI
 
-#include "common.hlsli"
+#include "../common/common.hlsli"
 
 struct TonemapCb
 {
@@ -17,16 +17,16 @@ struct TonemapCb
     float Exposure;
 };
 
-struct ObjectCb {
-    mat4 World;
-    mat4 View;
-    mat4 Proj;
+struct PresentCb 
+{
+    uint32 displayMode;
+    float standardNits;
 };
 
 static TonemapCb DefaultTonemapParameters()
 {
     TonemapCb result;
-    result.Exposure = 0.5f;
+    result.Exposure = 0.2f;
     result.A = 0.22f;
     result.B = 0.3f;
     result.C = 0.1f;

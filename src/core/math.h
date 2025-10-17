@@ -11,15 +11,15 @@
 
 #include "simd.h"
 
-#define M_PI 3.14159265359f
-#define M_PI_OVER_180 (M_PI / 180.f)
-#define M_180_OVER_PI (180.f / M_PI)
-#define M_TAU 6.28318530718f
+#define PI 3.141592653589f
+#define PI_OVER_180 (PI / 180.f)
+#define INV_PI_OVER_180 (180.f / PI)
+#define TAU 6.28318530718f
 
 #define EPSILON 1e-6f
 
-#define deg2rad(deg) ((deg) * M_PI_OVER_180)
-#define rad2deg(rad) ((rad) * M_180_OVER_PI)
+#define deg2rad(deg) ((deg) * PI_OVER_180)
+#define rad2deg(rad) ((rad) * INV_PI_OVER_180)
 
 static float lerp(float l, float u, float t) { return l + t * (u - l); }
 static float inverseLerp(float l, float u, float v) { return (v - l) / (u - l); }
@@ -28,7 +28,7 @@ static float clamp(float v, float l, float u) { return min(u, max(l, v)); }
 static uint32 clamp(uint32 v, uint32 l, uint32 u) { return min(u, max(l, v)); }
 static int32 clamp(int32 v, int32 l, int32 u) { return min(u, max(l, v)); }
 static float clamp01(float v) { return clamp(v, 0.f, 1.f); }
-
+static uint32 bucketize(uint32 problemSize, uint32 bucketSize) { return (problemSize + bucketSize - 1) / bucketSize; }
 
 struct vec2 {
 	float x, y;
@@ -451,8 +451,9 @@ mat4 CreatePerspectiveProjectionMatrix(float width, float height, float fx, floa
 mat4 CreateOrthographicProjectionMatrix(float r, float l, float t, float b, float nearPlane, float farPlane);
 mat4 InvertPerspectiveProjectionMatrix(mat4 m);
 mat4 InvertOrthographicProjectionMatrix(mat4 m);
-mat4 CreateModelMatrix(vec3 position, quat rotation, vec3 scale);
+mat4 CreateModelMatrix(vec3 position, quat rotation, vec3 scale = vec3(1.f, 1.f, 1.f));
 mat4 CreateViewMatrix(vec3 eye, float pitch, float yaw);
+mat4 CreateSkyViewMatrix(mat4 v);
 mat4 LookAt(vec3 eye, vec3 target, vec3 up);
 mat4 CreateViewMatrix(vec3 position, quat rotation);
 mat4 InvertedAffine(mat4 m);

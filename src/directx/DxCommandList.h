@@ -112,6 +112,7 @@ public:
 	// Render targets.
 	void SetScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv);
 	void SetRenderTarget(DxRenderTarget& renderTarget, uint32 arraySlice = 0);
+	void ClearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, float r, float g, float b, float a = 1.f);
 	void ClearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* clearColor);
 	void ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float depth = 1.f);
 	void ClearStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, uint32 stencil = 0);

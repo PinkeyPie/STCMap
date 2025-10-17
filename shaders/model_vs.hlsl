@@ -1,4 +1,4 @@
-#include "common/model_rs.hlsli"
+#include "rs/model_rs.hlsli"
 
 ConstantBuffer<TransformCb> transform : register(b0);
 

@@ -1,4 +1,4 @@
-#include "common/model_rs.hlsli"
+#include "rs/model_rs.hlsli"
 
 struct PsInput
 {
@@ -6,9 +6,14 @@ struct PsInput
     float3 normal : NORMAL;
 };
 
+SamplerState TexSampler : register(s0);
+Texture2D<float4> Tex   : register(t0);
+
 [RootSignature(MODEL_RS)]
 float4 main(PsInput pin) : SV_Target
 {
+    float4 albedo = Tex.Sample(TexSampler, pin.uv) * 10.f;
+
     static const float3 L = normalize(float3(1.f, 0.8f, 0.3f));
-    return saturate(dot(L, normalize(pin.normal))) * float4(1.f, 1.f, 1.f, 1.f);
+    return clamp(dot(L, normalize(pin.normal)), 0.1f, 1.f) * albedo;
 }

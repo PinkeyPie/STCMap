@@ -21,8 +21,8 @@ struct DxDescriptorHandle {
 
 class DxDescriptorHeap {
 public:
-	Com<ID3D12DescriptorHeap> DescriptorHeap;
-	D3D12_DESCRIPTOR_HEAP_TYPE Type;
+	Com<ID3D12DescriptorHeap> DescriptorHeap = nullptr;
+	D3D12_DESCRIPTOR_HEAP_TYPE Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	DxDescriptorHeap() = default;
 	DxDescriptorHeap(uint32 maxNumDescriptors, uint32 descriptorHandleIncrementSize) :
 	_maxNumDescriptors(maxNumDescriptors), _descriptorHandleIncrementSize(descriptorHandleIncrementSize) {}
@@ -36,6 +36,9 @@ public:
 		return {.CpuHandle = cpuHandle, .GpuHandle = gpuHandle };
 	}
 	void SetBase(DxDescriptorHandle handle);
+	uint32 GetIncrementSize() const {
+		return _descriptorHandleIncrementSize;
+	}
 
 protected:
 	void Initialize(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors, bool shaderVisible);

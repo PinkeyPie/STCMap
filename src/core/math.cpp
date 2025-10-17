@@ -377,7 +377,7 @@ quat rotateFromTo(vec3 _from, vec3 _to) {
 			axis = cross(vec3(0.f, 1.f, 0.f), from);
 		}
 		axis = normalize(axis);
-		q = normalize(quat(axis, M_PI));
+		q = normalize(quat(axis, PI));
 	}
 	else {
 		float s = sqrt((1.f + d) * 2.f);
@@ -683,6 +683,11 @@ mat4 CreateViewMatrix(vec3 eye, float pitch, float yaw) {
 	return result;
 }
 
+mat4 CreateSkyViewMatrix(mat4 v) {
+	v.m03 = 0.f; v.m13 = 0.f; v.m23 = 0.f;
+	return v;
+}
+
 mat4 LookAt(vec3 eye, vec3 target, vec3 up) {
 	vec3 zAxis = normalize(eye - target);
 	vec3 xAxis = normalize(cross(up, zAxis));
@@ -784,20 +789,20 @@ vec2 DirectionToPanoramaUv(vec3 dir) {
 
 float AngleToZeroToTwoPi(float angle) {
 	while (angle < 0) {
-		angle += M_TAU;
+		angle += TAU;
 	}
-	while (angle > M_TAU) {
-		angle -= M_TAU;
+	while (angle > TAU) {
+		angle -= TAU;
 	}
 	return angle;
 }
 
 float AngleToNegPiToPi(float angle) {
-	while (angle < -M_PI) {
-		angle += M_TAU;
+	while (angle < -PI) {
+		angle += TAU;
 	}
-	while (angle > M_PI) {
-		angle -= M_TAU;
+	while (angle > PI) {
+		angle -= TAU;
 	}
 	return angle;
 }

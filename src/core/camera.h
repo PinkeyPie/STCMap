@@ -35,6 +35,7 @@ public:
 	float VerticalFOV;
 
 	void RecalculateMatrices(uint32 renderWidth, uint32 renderHeight);
+	void RecalculateMatrices(float renderWidth, float renderHeight);
 };
 
 class RealCamera : public CameraBase {

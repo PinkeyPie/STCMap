@@ -65,8 +65,10 @@ if(WIN32)
             EnTT::EnTT
             Microsoft::DirectXTex
     )
-    target_include_directories(${PROJECT_NAME} PRIVATE ${shaders_dir}/common ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
-    ${CMAKE_CURRENT_BINARY_DIR}/_deps/entt-src)
+    target_include_directories(${PROJECT_NAME} PRIVATE
+            ${shaders_dir}/common
+            ${shaders_dir}/rs
+            ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 else ()
     add_executable(${PROJECT_NAME} ${src_files})
     target_compile_options(${PROJECT_NAME} INTERFACE -msse4.1)

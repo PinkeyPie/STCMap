@@ -234,11 +234,30 @@ public:
 	DxPipeline CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files,
 		DxRootSignature userRootSignature = nullptr);
 	DxPipeline CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files,
-		const char* rootSignatureFile);
+		const char* rootSignatureFile = nullptr); // If RS file is null, it will take the pixel shader by default
+
+	DxPipeline CreateReloadablePipeline(const char* csFile, DxRootSignature userRootSignature);
+	DxPipeline CreateReloadablePipeline(const char* csFile, const char* rootSignatureFile = nullptr); // If RS file is null, it will take the cs by default.
 private:
+	enum PipelineType {
+		EPipelineTypeGraphics,
+		EPipelineTypeCompute
+	};
+
 	struct ReloadablePipelineState {
-		D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc = {};
-		GraphicsPipelineFiles Files = {};
+		PipelineType Type;
+
+		union {
+			struct {
+				D3D12_GRAPHICS_PIPELINE_STATE_DESC GraphicsDesc;
+				GraphicsPipelineFiles GraphicsFiles;
+			};
+
+			struct {
+				D3D12_COMPUTE_PIPELINE_STATE_DESC ComputeDesc;
+				const char* ComputeFile;
+			};
+		};
 
 		DxPipelineState Pipeline = nullptr;
 		DxRootSignature* RootSignature = nullptr;
@@ -249,6 +268,7 @@ private:
 		ReloadablePipelineState() = default;
 
 		void Initialize(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files, DxRootSignature* rootSignature);
+		void Initialize(const char* file, DxRootSignature* rootSignature);
 	};
 
 	struct ReloadableRootSignature {

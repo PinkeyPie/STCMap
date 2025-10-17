@@ -204,6 +204,11 @@ void DxCommandList::SetRenderTarget(DxRenderTarget& renderTarget, uint32 arraySl
 	CommandList->OMSetRenderTargets(renderTarget.NumAttachments, renderTarget.RtvHandles, FALSE, dsv);
 }
 
+void DxCommandList::ClearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, float r, float g, float b, float a) {
+	float clearColor[] = { r, g, b, a };
+	ClearRTV(rtv, clearColor);
+}
+
 void DxCommandList::ClearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* clearColor) {
 	CommandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 }

@@ -44,7 +44,7 @@ namespace {
 		fs::path extension = filepath.extension();
 
 		fs::path cachedFilename = filepath;
-		cachedFilename.replace_extension(".cache.dds");
+		cachedFilename.replace_extension("." + std::to_string(flags) + ".cache.dds");
 
 		fs::path cacheFilepath = L"bin_cache" / cachedFilename;
 
@@ -70,13 +70,13 @@ namespace {
 		}
 
 		if (not fromCache) {
-			if (extension == "dds") {
+			if (extension == ".dds") {
 				ThrowIfFailed(DirectX::LoadFromDDSFile(filepath.c_str(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage));
 			}
-			else if (extension == "hdr") {
+			else if (extension == ".hdr") {
 				ThrowIfFailed(DirectX::LoadFromHDRFile(filepath.c_str(), &metadata, scratchImage));
 			}
-			else if (extension == "tga") {
+			else if (extension == ".tga") {
 				ThrowIfFailed(DirectX::LoadFromTGAFile(filepath.c_str(), &metadata, scratchImage));
 			}
 			else {
@@ -111,7 +111,7 @@ namespace {
 				metadata = scratchImage.GetMetadata();
 			}
 
-			if (flags & ETextureLoadFlagsCompressBc3) {
+			if (flags & ETextureLoadFlagsCompress) {
 				DirectX::ScratchImage compressedImage;
 				DirectX::TEX_COMPRESS_FLAGS compressFlags = DirectX::TEX_COMPRESS_PARALLEL;
 				DXGI_FORMAT compressedFormat = DirectX::IsSRGB(metadata.format) ? DXGI_FORMAT_BC3_UNORM_SRGB : DXGI_FORMAT_BC3_UNORM;
