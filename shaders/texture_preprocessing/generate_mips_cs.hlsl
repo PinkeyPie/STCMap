@@ -68,12 +68,12 @@ float4 LoadColorFromSharedMemory(uint index)
     return float4(GsR[index], GsG[index], GsB[index], GsA[index]);
 }
 
-float SRGBToLinear(float3 c)
+float3 SRGBToLinear(float3 c)
 {
     return c < 0.04045f ? c * (1.0f / 12.92f) : pow((c + 0.055f) * (1.0f / 1.055f), 2.4f);
 }
 
-float LinearToSRGB(float3 c)
+float3 LinearToSRGB(float3 c)
 {
     return c <= 0.0031308f ? c * 12.92f : 1.055f * pow(c, 1.0f / 2.4f) - 0.055f;
 }
@@ -91,7 +91,7 @@ float4 PackColor(float4 c)
 }
 
 [RootSignature(RS)]
-[numThreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
+[numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(CsInput input) 
 {
     float4 src1 = (float4)0;

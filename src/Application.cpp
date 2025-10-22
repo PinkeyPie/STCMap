@@ -63,32 +63,34 @@ namespace {
 			return (Button)(vkCode + EButton_f1 - VK_F1);
 		}
 		switch (vkCode) {
-		case VK_SPACE:
-			return EButton_space;
-		case VK_TAB:
-			return EButton_tab;
-		case VK_RETURN:
-			return EButton_enter;
-		case VK_SHIFT:
-			return EButton_shift;
-		case VK_CONTROL:
-			return EButton_ctrl;
-		case VK_ESCAPE:
-			return EButton_esc;
-		case VK_UP:
-			return EButton_up;
-		case VK_DOWN:
-			return EButton_down;
-		case VK_LEFT:
-			return EButton_left;
-		case VK_RIGHT:
-			return EButton_right;
-		case VK_MENU:
-			return EButton_alt;
-		case VK_BACK:
-			return EButton_backspace;
-		case VK_DELETE:
-			return EButton_delete;
+			case VK_SPACE:
+				return EButton_space;
+			case VK_TAB:
+				return EButton_tab;
+			case VK_RETURN:
+				return EButton_enter;
+			case VK_SHIFT:
+				return EButton_shift;
+			case VK_CONTROL:
+				return EButton_ctrl;
+			case VK_ESCAPE:
+				return EButton_esc;
+			case VK_UP:
+				return EButton_up;
+			case VK_DOWN:
+				return EButton_down;
+			case VK_LEFT:
+				return EButton_left;
+			case VK_RIGHT:
+				return EButton_right;
+			case VK_MENU:
+				return EButton_alt;
+			case VK_BACK:
+				return EButton_backspace;
+			case VK_DELETE:
+				return EButton_delete;
+			default:
+				return EButton_unknown;
 		}
 	}
 }
@@ -235,7 +237,7 @@ bool Application::HandleWindowsMessages() {
 }
 
 uint64 Application::RenderToWindow(float* clearColor) {
-	DxResource frameResult = DxRenderer::Instance()->HdrRenderTarget.ColorAttachments[0];
+	DxResource frameResult = DxRenderer::Instance()->FrameResult.Resource;
 	DxResource backBuffer = _mainWindow.GetCurrentBackBuffer();
 	
 	DxCommandList* cl = DxContext::Instance().GetFreeRenderCommandList();
@@ -246,6 +248,9 @@ uint64 Application::RenderToWindow(float* clearColor) {
 	cl->SetScissor(scissorRect);
 	cl->SetViewport(viewport);
 
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = _mainWindow.Rtv();
+	CD3DX12_CPU_DESCRIPTOR_HANDLE dsv = _mainWindow.Dsv();
+	cl->SetScreenRenderTarget(&rtv, 1, &dsv);
 	BarrierBatcher(cl).Transition(backBuffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RESOLVE_DEST)
 				      .Transition(frameResult, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
 	cl->ResolveSubresource(backBuffer, 0, frameResult, 0, _mainWindow.GetBackBufferFormat());

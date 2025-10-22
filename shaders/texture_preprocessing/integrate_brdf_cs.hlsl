@@ -1,7 +1,7 @@
 #define RS \
 "RootFlags(0), " \
 "RootConstants(b0, num32BitConstants=1), "\
-"DescriptorTable(UAV(u0, numDescriptors=1, flags=DESCRIPTOR_VOLATILE))"
+"DescriptorTable(UAV(u0, numDescriptors=1, flags=DESCRIPTORS_VOLATILE))"
 
 #define BLOCK_SIZE 16
 
@@ -23,7 +23,7 @@ cbuffer IntegrateBrdfCb : register(b0)
 RWTexture2D<float2> OutBRDF : register(u0);
 
 [RootSignature(RS)]
-[numThreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
+[numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(CsInput input) 
 {
     if(input.DispatchThreadId.x >= TextureDim || input.DispatchThreadId.y >= TextureDim)

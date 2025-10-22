@@ -93,7 +93,7 @@ float PackColor(float4 x)
 }
 
 [RootSignature(RS)]
-[numThreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
+[numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(CsInput input) 
 {
     // Calculate the texel coordinates in the cubemap face
@@ -120,18 +120,18 @@ void main(CsInput input)
     // Only perform on thread that are a multiple of the mip level size
     if(NumMipLevels > 2 && (input.GroupIndex & 0x11) == 0)
     {
-        DstMip2[texCoord.xy / 2, texCoord.z] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 1));
+        DstMip2[uint3(texCoord.xy / 2, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 1));
     }
     if(NumMipLevels > 3 && (input.GroupIndex & 0x33) == 0)
     {
-        DstMip3[texCoord.xy / 4, texCoord.z] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 2));
+        DstMip3[uint3(texCoord.xy / 4, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 2));
     }
     if(NumMipLevels > 4 && (input.GroupIndex & 0x77) == 0)
     {
-        DstMip4[texCoord.xy / 8, texCoord.z] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 3));
+        DstMip4[uint3(texCoord.xy / 8, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 3));
     }
     if(NumMipLevels > 5 && (input.GroupIndex & 0xFF) == 0)
     {
-        DstMip5[texCoord.xy / 16, texCoord.z] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 4));
+        DstMip5[uint3(texCoord.xy / 16, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 4));
     }
 }

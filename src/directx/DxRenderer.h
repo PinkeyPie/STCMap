@@ -7,6 +7,7 @@
 
 #include "math.h"
 #include "present_rs.hlsli"
+#include "../physics/mesh.h"
 
 enum AspectRatioMode {
 	EAspectRatioFree,
@@ -45,14 +46,9 @@ public:
 	void BeginFrame(CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle, DxResource renderTarget);
 	void RecalculateViewport(bool resizeTextures);
 	int DummyRender(float dt);
+	DxTexture FrameResult;
 
 	DxCbvSrvUavDescriptorHeap GlobalDescriptorHeap;
-
-	CD3DX12_CPU_DESCRIPTOR_HANDLE Rtv;
-	DxTexture FrameResult;
-	DxTexture DepthBuffer;
-
-	DxRenderTarget HdrRenderTarget;
 
 private:
 	static DxRenderer* _instance;
@@ -63,21 +59,20 @@ private:
 
 	TonemapCb _tonemap = DefaultTonemapParameters();
 
+	D3D12_VIEWPORT _windowViewport;
 	D3D12_VIEWPORT _viewport;
+
+	DxRenderTarget _windowRenderTarget;
+	DxRenderTarget _hdrRenderTarget;
 
 	DxTexture _hdrColorTexture;
 	DxDescriptorHandle _hdrColorTextureSrv;
+	DxTexture _depthBuffer;
 
 	uint32 _renderWidth;
 	uint32 _renderHeight;
 	uint32 _windowWidth;
 	uint32 _windowHeight;
-
-	DxRenderTarget _windowRenderTarget;
-	DxDescriptorHandle _frameResultSrv;
-	DxTexture _frameResult;
-
-	D3D12_VIEWPORT _windowViewport;
 
 	AspectRatioMode _aspectRatioMode;
 
@@ -85,6 +80,16 @@ private:
 	DxPipeline _proceduralSkyPipeline;
 	DxPipeline _presentPipeline;
 	DxPipeline _modelPipeline;
+
+	CompositeMesh _sceneMesh;
+	DxTexture _texture;
+	DxDescriptorHandle _textureHandle;
+	trs* _meshTransforms;
+	mat4* _meshModelMatrices;
+	static constexpr uint32 _numMeshes = 1024;
+
+	DxMesh _skyMesh;
+	PbrEnvironment _environment;
 
 	float _clearColor[4];
 };

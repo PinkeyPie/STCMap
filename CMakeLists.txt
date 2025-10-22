@@ -9,7 +9,11 @@ endif ()
 message(${CMAKE_CXX_FLAGS})
 include(scripts/functions.cmake)
 
-find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/scripts/build.py)
+    find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+    execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/build.py)
+endif()
+
 
 find_package(directxtex CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
@@ -54,7 +58,7 @@ if(WIN32)
             Comctl32.lib
             /MACHINE:X64
     )
-
+    list(APPEND src_files ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/dx/DDSTextureLoader.cpp)
     set(shaders_dir ${PROJECT_SOURCE_DIR}/shaders)
     add_executable(${PROJECT_NAME} ${src_files} ${headers})
     target_compile_options(${PROJECT_NAME} INTERFACE /arch:SSE4.1)

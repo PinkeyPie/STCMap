@@ -12,7 +12,20 @@
 
 namespace fs = std::filesystem;
 
-#define CACHE_FORMAT "fbx" // We don't export as assbin, because the exporter kills the mesh names, which we use to identify LODs
+#define CACHE_FORMAT "assbin" // We don't export as assbin, because the exporter kills the mesh names, which we use to identify LODs
+
+namespace {
+    void FixUpMeshNames(const aiScene* scene, const aiNode* root) {
+        for (uint32 i = 0; i < root->mNumMeshes; i++) {
+            aiMesh* mesh = scene->mMeshes[root->mMeshes[i]];
+            mesh->mName = root->mName;
+        }
+
+        for (uint32 i = 0; i < root->mNumChildren; i++) {
+            FixUpMeshNames(scene, root->mChildren[i]);
+        }
+    }
+}
 
 const aiScene *LoadAssimpScene(const char *filepathRaw) {
     fs::path filepath = filepathRaw;
@@ -47,7 +60,7 @@ const aiScene *LoadAssimpScene(const char *filepathRaw) {
     if (not scene) {
         importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 80.f);
         importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, aiPrimitiveType_POINT | aiPrimitiveType_LINE);
-        importer.SetPropertyInteger(AI_CONFIG_PP_SLM_VERTEX_LIMIT, UINT16_MAX);
+        importer.SetPropertyInteger(AI_CONFIG_PP_SLM_VERTEX_LIMIT, UINT16_MAX); // So that we can use 16 bit indices.
 
         uint32 importFlags = aiProcessPreset_TargetRealtime_MaxQuality | aiProcess_FlipUVs;
         uint32 exportFlags = 0;
@@ -68,6 +81,7 @@ const aiScene *LoadAssimpScene(const char *filepathRaw) {
 
     if (scene) {
         scene = importer.GetOrphanedScene();
+        FixUpMeshNames(scene, scene->mRootNode);
     }
 
     return scene;
@@ -79,23 +93,7 @@ void FreeScene(const aiScene *scene) {
     }
 }
 
-struct SingleMesh {
-    SubmeshInfo Submesh;
-    AABBCollider BoundingBox;
-    std::string Name;
-};
-
-struct LodMesh {
-    uint32 FirstMesh;
-    uint32 NumMeshes;
-};
-
-struct CompositeMesh {
-    std::vector<SingleMesh> SingleMeshes;
-    std::vector<LodMesh> Lods;
-};
-
-void AnalyzeScene(const aiScene *scene) {
+CompositeMesh CreateCompositeMeshFromScene(const aiScene *scene) {
     struct MeshInfo {
         int32 Lod;
         SubmeshInfo Submesh;
@@ -183,13 +181,26 @@ void AnalyzeScene(const aiScene *scene) {
         std::cout << "There is a gap in the LOD declarations." << std::endl;
     }
 
+    result.LodDistances.resize(result.Lods.size());
+
     std::cout << "There are " << result.Lods.size() << " LODs in this file" << std::endl;
 
     uint32 l = 0;
     for (LodMesh& lod : result.Lods) {
         std::cout << "LOD " << l++ << ": " << std::endl;
         for (uint32 i = lod.FirstMesh; i < lod.FirstMesh + lod.NumMeshes; i++) {
-            std::cout << "    " << result.SingleMeshes[i].Name << std::endl;
+            std::cout << "   "
+            << result.SingleMeshes[i].Name << " -- "
+            << result.SingleMeshes[i].Submesh.NumVertices << " vertices, "
+            << result.SingleMeshes[i].Submesh.NumTriangles << " triangles. " << std::endl;
         }
     }
+
+    for (uint32 i = 0; i < (uint32)result.LodDistances.size(); i++) {
+        result.LodDistances[i] = float(i); // Todo: better default values
+    }
+
+    result.Mesh = cpuMesh.CreateDxMesh();
+
+    return result;
 }

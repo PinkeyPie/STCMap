@@ -4,13 +4,7 @@
 // http://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html
 // We should really make an optimization pass over this code. Many terms are computed multiple times.
 
-#ifndef PI
-#define PI 3.14159265359f
-#endif
-
-#ifndef ONE_OVER_PI
-#define ONE_OVER_PI (1.f / PI)
-#endif
+#include "math.hlsli"
 
 static float3 FresnelSchlick(float LdotH, float3 R0)
 {

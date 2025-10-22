@@ -45,7 +45,7 @@ void TexturePreprocessor::Initialize() {
     _mipmapPipeline = factory->CreateReloadablePipeline("generate_mips_cs");
     _equirectangularToCubemapPipeline = factory->CreateReloadablePipeline("equirectangular_to_cubemap_cs");
     _cubemapToIrradiancePipeline = factory->CreateReloadablePipeline("cubemap_to_irradiance_cs");
-    _prefilteredEnvironmentPipeline = factory->CreateReloadablePipeline("prefiltered_environment_cs");
+    _prefilteredEnvironmentPipeline = factory->CreateReloadablePipeline("prefilter_environment_cs");
     _integrateBRDFPipeline = factory->CreateReloadablePipeline("integrate_brdf_cs");
 }
 
@@ -323,6 +323,7 @@ DxTexture TexturePreprocessor::EquirectangularToCubemap(DxCommandList *cl, DxTex
 DxTexture TexturePreprocessor::CubemapToIrradiance(DxCommandList *cl, DxTexture &environment, uint32 resolution, uint32 sourceSlice, float uvzScale) {
     assert(environment.Resource);
 
+    DxContext& dxContext = DxContext::Instance();
     CD3DX12_RESOURCE_DESC irradianceDesc(environment.Resource->GetDesc());
 
     if (IsSRGBFormat(irradianceDesc.Format)) {
@@ -334,6 +335,207 @@ DxTexture TexturePreprocessor::CubemapToIrradiance(DxCommandList *cl, DxTexture 
     irradianceDesc.MipLevels = 1;
 
     DxTexture irradiance = DxTexture::Create(irradianceDesc, 0, 0);
+
+    irradianceDesc = CD3DX12_RESOURCE_DESC(irradiance.Resource->GetDesc());
+
+    DxResource irradianceResource = irradiance.Resource;
+    DxResource stagingResource = irradianceResource;
+
+    DxTexture stagingTexture = irradiance;
+
+    if ((irradianceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0) {
+        CD3DX12_RESOURCE_DESC stagingDesc = irradianceDesc;
+        stagingDesc.Format = GetUAVCompatibleFormat(irradianceDesc.Format);
+        stagingDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_DEFAULT);
+        ThrowIfFailed(dxContext.GetDevice()->CreateCommittedResource(
+            &heapProperties,
+            D3D12_HEAP_FLAG_NONE,
+            &stagingDesc,
+            D3D12_RESOURCE_STATE_COMMON,
+            nullptr,
+            IID_PPV_ARGS(stagingResource.GetAddressOf())
+        ));
+
+        stagingTexture.Resource = stagingResource;
+    }
+
+    cl->SetPipelineState(*_cubemapToIrradiancePipeline.Pipeline);
+    cl->SetComputeRootSignature(*_cubemapToIrradiancePipeline.RootSignature);
+
+    CubemapToIrradianceCb cubemapToIrradianceCb;
+
+    cubemapToIrradianceCb.IrradianceMapSize = resolution;
+    cubemapToIrradianceCb.UvzScale = uvzScale;
+
+    DxDescriptorRange descriptors = dxContext.AllocateContiguousDescriptorRange(2);
+    cl->SetDescriptorHeap(descriptors);
+
+    DxDescriptorHandle uavOffset = descriptors.Push2DTextureArrayUAV(stagingTexture, 0, GetUAVCompatibleFormat(irradianceDesc.Format));
+
+    DxDescriptorHandle srvOffset;
+
+    if (sourceSlice == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES) {
+        srvOffset = descriptors.PushCubemapSRV(environment);
+    }
+    else {
+        srvOffset = descriptors.PushCubemapArraySRV(environment, {0, 1}, sourceSlice, 1);
+    }
+
+    cl->SetCompute32BitConstants(0, cubemapToIrradianceCb);
+    cl->SetComputeDescriptorTable(1, srvOffset);
+    cl->SetComputeDescriptorTable(2, uavOffset);
+
+    cl->Dispatch(bucketize(cubemapToIrradianceCb.IrradianceMapSize, 16), bucketize(cubemapToIrradianceCb.IrradianceMapSize, 16), 6);
+
+    if (stagingResource != irradianceResource) {
+        cl->CopyResource(stagingTexture.Resource, irradiance.Resource);
+        cl->TransitionBarrier(irradiance.Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
+    }
+
+    dxContext.RetireObject(stagingTexture.Resource);
+
+    return irradiance;
 }
 
+DxTexture TexturePreprocessor::PrefilterEnvironment(DxCommandList *cl, DxTexture &environment, uint32 resolution) {
+    assert(environment.Resource);
 
+    DxContext& dxContext = DxContext::Instance();
+    CD3DX12_RESOURCE_DESC prefilteredDesc(environment.Resource->GetDesc());
+    prefilteredDesc.Width = prefilteredDesc.Height = resolution;
+    prefilteredDesc.DepthOrArraySize = 6;
+    prefilteredDesc.MipLevels = 0;
+
+    DxTexture prefiltered = DxTexture::Create(prefilteredDesc, nullptr, 0);
+
+    prefilteredDesc = CD3DX12_RESOURCE_DESC(prefiltered.Resource->GetDesc());
+
+    DxResource prefilteredResource = prefiltered.Resource;
+    DxResource stagingResource = prefilteredResource;
+
+    DxTexture stagingTexture = prefiltered;
+
+    if ((prefilteredDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0) {
+        CD3DX12_RESOURCE_DESC stagingDesc = prefilteredDesc;
+        stagingDesc.Format = GetUAVCompatibleFormat(prefilteredDesc.Format);
+        stagingDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        CD3DX12_HEAP_PROPERTIES properties(D3D12_HEAP_TYPE_DEFAULT);
+        ThrowIfFailed(dxContext.GetDevice()->CreateCommittedResource(
+            &properties,
+            D3D12_HEAP_FLAG_NONE,
+            &stagingDesc,
+            D3D12_RESOURCE_STATE_COMMON,
+            nullptr,
+            IID_PPV_ARGS(&stagingResource)
+        ));
+
+        stagingTexture.Resource = stagingResource;
+
+        SetName(stagingTexture.Resource, "Staging");
+    }
+
+    cl->SetPipelineState(*_prefilteredEnvironmentPipeline.Pipeline);
+    cl->SetComputeRootSignature(*_prefilteredEnvironmentPipeline.RootSignature);
+
+    PrefilteredEnvironmentCb prefilteredEnvironmentCb;
+    prefilteredEnvironmentCb.TotalNumMipLevels = prefilteredDesc.MipLevels;
+
+    DxDescriptorRange descriptors = dxContext.AllocateContiguousDescriptorRange(prefilteredDesc.MipLevels + 1);
+    cl->SetDescriptorHeap(descriptors);
+
+    DxDescriptorHandle srvOffset = descriptors.PushCubemapSRV(environment);
+    cl->SetComputeDescriptorTable(1, srvOffset);
+
+    for (uint32 mipSlice = 0; mipSlice < prefilteredDesc.MipLevels; ) {
+        // Maximum number of mips to generate per pass is 5
+        uint32 numMips = min(5, prefilteredDesc.MipLevels - mipSlice);
+
+        prefilteredEnvironmentCb.FirstMip = mipSlice;
+        prefilteredEnvironmentCb.CubemapSize = max((uint32)prefilteredDesc.Width, prefilteredDesc.Height) >> mipSlice;
+        prefilteredEnvironmentCb.NumMipLevels = numMips;
+
+        cl->SetCompute32BitConstants(0, prefilteredEnvironmentCb);
+
+        for (uint32 mip = 0; mip < numMips; mip++) {
+            DxDescriptorHandle handle = descriptors.Push2DTextureArrayUAV(stagingTexture, mipSlice + mip, GetUAVCompatibleFormat(prefilteredDesc.Format));
+            if (mip == 0) {
+                cl->SetComputeDescriptorTable(2, handle);
+            }
+        }
+
+        cl->Dispatch(bucketize(prefilteredEnvironmentCb.CubemapSize, 16), bucketize(prefilteredEnvironmentCb.CubemapSize, 16), 6);
+
+        mipSlice += numMips;
+    }
+
+    if (stagingResource != prefilteredResource) {
+        cl->CopyResource(stagingTexture.Resource, prefiltered.Resource);
+        cl->TransitionBarrier(prefiltered.Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
+    }
+
+    dxContext.RetireObject(stagingTexture.Resource);
+
+    return prefiltered;
+}
+
+DxTexture TexturePreprocessor::IntegrateBRDF(DxCommandList *cl, uint32 resolution) {
+    DxContext& dxContext = DxContext::Instance();
+    CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Tex2D(
+        DXGI_FORMAT_R16G16_FLOAT,
+        resolution, resolution, 1, 1
+    );
+
+    DxTexture brdf = DxTexture::Create(desc, nullptr, 0);
+    desc = CD3DX12_RESOURCE_DESC(brdf.Resource->GetDesc());
+
+    DxResource brdfResource = brdf.Resource;
+    DxResource stagingResource = brdfResource;
+
+    DxTexture stagingTexture = brdf;
+
+    if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0) {
+        CD3DX12_RESOURCE_DESC stagingDesc = desc;
+        stagingDesc.Format = GetUAVCompatibleFormat(desc.Format);
+        stagingDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+        CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_DEFAULT);
+        ThrowIfFailed(dxContext.GetDevice()->CreateCommittedResource(
+            &heapProperties,
+            D3D12_HEAP_FLAG_NONE,
+            &stagingDesc,
+            D3D12_RESOURCE_STATE_COMMON,
+            nullptr,
+            IID_PPV_ARGS(stagingResource.GetAddressOf())
+        ));
+
+        stagingTexture.Resource = stagingResource;
+    }
+
+    cl->SetPipelineState(*_integrateBRDFPipeline.Pipeline);
+    cl->SetComputeRootSignature(*_integrateBRDFPipeline.RootSignature);
+
+    IntegrateBRDFCb integrateBrdfCb;
+    integrateBrdfCb.TextureDim = resolution;
+
+    cl->SetCompute32BitConstants(0, integrateBrdfCb);
+
+    DxDescriptorRange descriptors = dxContext.AllocateContiguousDescriptorRange(1);
+    cl->SetDescriptorHeap(descriptors);
+
+    DxDescriptorHandle uav = descriptors.Push2DTextureUAV(stagingTexture, 0, GetUAVCompatibleFormat(desc.Format));
+    cl->SetComputeDescriptorTable(1, uav);
+
+    cl->Dispatch(bucketize(resolution, 16), bucketize(resolution, 16), 1);
+
+    if (stagingResource != brdfResource) {
+        cl->CopyResource(stagingTexture.Resource, brdf.Resource);
+        cl->TransitionBarrier(brdf.Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
+    }
+
+    dxContext.RetireObject(stagingTexture.Resource);
+
+    return brdf;
+}

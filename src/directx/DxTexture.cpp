@@ -1,8 +1,11 @@
 #include "DxTexture.h"
 #include <filesystem>
+
+#include "BarrierBatcher.h"
 #include "DxContext.h"
 #include "DxRenderPrimitives.h"
 #include "DirectXTex.h"
+#include "dx/DDSTextureLoader.h"
 
 namespace fs = std::filesystem;
 
@@ -39,21 +42,19 @@ namespace {
 		return format;
 	}
 
-	bool LoadImageFromFile(const char* filepathRaw, uint32 flags, DirectX::ScratchImage& scratchImage, D3D12_RESOURCE_DESC& textureDesc) {
-		fs::path filepath = filepathRaw;
-		fs::path extension = filepath.extension();
-
+	fs::path GetCacheName(const fs::path &filepath, uint32 flags) {
 		fs::path cachedFilename = filepath;
 		cachedFilename.replace_extension("." + std::to_string(flags) + ".cache.dds");
+		return L"bin_cache" / cachedFilename;
+	}
 
-		fs::path cacheFilepath = L"bin_cache" / cachedFilename;
+	fs::path GetFilepath(const char* filename, uint32 flags) {
+		fs::path filepath = filename;
+		fs::path extension = filepath.extension();
 
-		bool fromCache = false;
-		DirectX::TexMetadata metadata;
+		fs::path cacheFilepath = GetCacheName(filename, flags);
 
 		if (not(flags & ETextureLoadFlagsAlwaysLoadFromSource)) {
-			// Look for cached
-
 			WIN32_FILE_ATTRIBUTE_DATA cachedData;
 			if (GetFileAttributesExW(cacheFilepath.c_str(), GetFileExInfoStandard, &cachedData)) {
 				FILETIME cachedFiletime = cachedData.ftLastWriteTime;
@@ -63,66 +64,92 @@ namespace {
 				FILETIME originalFiletime = originalData.ftLastWriteTime;
 
 				if (CompareFileTime(&cachedFiletime, &originalFiletime) >= 0) {
-					// Cached file is newer than original, so load this
-					fromCache = SUCCEEDED(DirectX::LoadFromDDSFile(cacheFilepath.c_str(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage));
+					return cacheFilepath;
 				}
 			}
 		}
 
-		if (not fromCache) {
-			if (extension == ".dds") {
-				ThrowIfFailed(DirectX::LoadFromDDSFile(filepath.c_str(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage));
-			}
-			else if (extension == ".hdr") {
-				ThrowIfFailed(DirectX::LoadFromHDRFile(filepath.c_str(), &metadata, scratchImage));
-			}
-			else if (extension == ".tga") {
-				ThrowIfFailed(DirectX::LoadFromTGAFile(filepath.c_str(), &metadata, scratchImage));
-			}
-			else {
-				ThrowIfFailed(DirectX::LoadFromWICFile(filepath.c_str(), DirectX::WIC_FLAGS_FORCE_RGB, &metadata, scratchImage));
-			}
+		return filepath;
+	}
 
-			if (flags & ETextureLoadFlagsNoncolor) {
-				metadata.format = MakeLinear(metadata.format);
-			}
-			else {
-				metadata.format = MakeSrgb(metadata.format);
-			}
+	void LoadScratchImage(const fs::path& filepath, uint32 flags, DirectX::ScratchImage& scratchImage, DirectX::TexMetadata& metadata) {
+		fs::path extension = filepath.extension();
+		if (extension == ".hdr") {
+			ThrowIfFailed(DirectX::LoadFromHDRFile(filepath.c_str(), &metadata, scratchImage));
+		}
+		else if (extension == ".tga") {
+			ThrowIfFailed(DirectX::LoadFromTGAFile(filepath.c_str(), &metadata, scratchImage));
+		}
+		else {
+			ThrowIfFailed(DirectX::LoadFromWICFile(filepath.c_str(), DirectX::WIC_FLAGS_FORCE_RGB, &metadata, scratchImage));
+		}
 
-			scratchImage.OverrideFormat(metadata.format);
+		if (flags & ETextureLoadFlagsNoncolor) {
+			metadata.format = MakeLinear(metadata.format);
+		}
+		else {
+			metadata.format = MakeSrgb(metadata.format);
+		}
 
-			if (flags & ETextureLoadFlagsGenMipsOnCpu) {
-				DirectX::ScratchImage mipChainImage;
+		scratchImage.OverrideFormat(metadata.format);
 
-				ThrowIfFailed(DirectX::GenerateMipMaps(scratchImage.GetImages(), scratchImage.GetImageCount(), metadata, DirectX::TEX_FILTER_DEFAULT, 0, mipChainImage));
-				scratchImage = std::move(mipChainImage);
-				metadata = scratchImage.GetMetadata();
-			}
-			else {
-				metadata.mipLevels = 1;
-			}
+		if (flags & ETextureLoadFlagsGenMipsOnCpu) {
+			DirectX::ScratchImage mipChainImage;
 
-			if (flags & ETextureLoadFlagsPremultiplyAlpha) {
-				DirectX::ScratchImage premultipliedAlphaImage;
+			ThrowIfFailed(DirectX::GenerateMipMaps(scratchImage.GetImages(), scratchImage.GetImageCount(), metadata, DirectX::TEX_FILTER_DEFAULT, 0, mipChainImage));
+			scratchImage = std::move(mipChainImage);
+			metadata = scratchImage.GetMetadata();
+		}
+		else {
+			metadata.mipLevels = 1;
+		}
 
-				ThrowIfFailed(DirectX::PremultiplyAlpha(scratchImage.GetImages(), scratchImage.GetImageCount(), metadata, DirectX::TEX_PMALPHA_DEFAULT, premultipliedAlphaImage));
-				scratchImage = std::move(premultipliedAlphaImage);
-				metadata = scratchImage.GetMetadata();
-			}
+		if (flags & ETextureLoadFlagsPremultiplyAlpha) {
+			DirectX::ScratchImage premultipliedAlphaImage;
 
-			if (flags & ETextureLoadFlagsCompress) {
-				DirectX::ScratchImage compressedImage;
-				DirectX::TEX_COMPRESS_FLAGS compressFlags = DirectX::TEX_COMPRESS_PARALLEL;
-				DXGI_FORMAT compressedFormat = DirectX::IsSRGB(metadata.format) ? DXGI_FORMAT_BC3_UNORM_SRGB : DXGI_FORMAT_BC3_UNORM;
+			ThrowIfFailed(DirectX::PremultiplyAlpha(scratchImage.GetImages(), scratchImage.GetImageCount(), metadata, DirectX::TEX_PMALPHA_DEFAULT, premultipliedAlphaImage));
+			scratchImage = std::move(premultipliedAlphaImage);
+			metadata = scratchImage.GetMetadata();
+		}
 
-				ThrowIfFailed(DirectX::Compress(scratchImage.GetImages(), scratchImage.GetImageCount(), metadata,
-					compressedFormat, compressFlags, DirectX::TEX_THRESHOLD_DEFAULT, compressedImage));
-				scratchImage = std::move(compressedImage);
-				metadata = scratchImage.GetMetadata();
-			}
+		if (flags & ETextureLoadFlagsCompress) {
+			DirectX::ScratchImage compressedImage;
+			DirectX::TEX_COMPRESS_FLAGS compressFlags = DirectX::TEX_COMPRESS_PARALLEL;
+			DXGI_FORMAT compressedFormat = DirectX::IsSRGB(metadata.format) ? DXGI_FORMAT_BC3_UNORM_SRGB : DXGI_FORMAT_BC3_UNORM;
+
+			ThrowIfFailed(DirectX::Compress(scratchImage.GetImages(), scratchImage.GetImageCount(), metadata,
+				compressedFormat, compressFlags, DirectX::TEX_THRESHOLD_DEFAULT, compressedImage));
+			scratchImage = std::move(compressedImage);
+			metadata = scratchImage.GetMetadata();
+		}
+	}
+
+	void CacheImageToDDS(const fs::path& filepath, uint32 flags) {
+		fs::path extension = filepath.extension();
+
+		if (extension != ".dds") {
+			DirectX::ScratchImage scratchImage;
+			DirectX::TexMetadata metadata;
+			LoadScratchImage(filepath, flags, scratchImage, metadata);
+
+			fs::path cacheFilepath = GetCacheName(filepath, flags);
+			fs::create_directories(cacheFilepath.parent_path());
+			ThrowIfFailed(DirectX::SaveToDDSFile(scratchImage.GetImages(), scratchImage.GetImageCount(), metadata, DirectX::DDS_FLAGS_NONE, cacheFilepath.c_str()));
+		}
+	}
+
+	bool LoadImageFromFile(const fs::path& filepath, uint32 flags, DirectX::ScratchImage& scratchImage, D3D12_RESOURCE_DESC& textureDesc) {
+		fs::path extension = filepath.extension();
+		DirectX::TexMetadata metadata;
+
+		if (extension == ".dds") {
+			ThrowIfFailed(DirectX::LoadFromDDSFile(filepath.c_str(), DirectX::DDS_FLAGS_NONE, &metadata, scratchImage));
+		}
+		else {
+			LoadScratchImage(filepath, flags, scratchImage, metadata);
 
 			if (flags & ETextureLoadFlagsCacheToDds) {
+				fs::path cacheFilepath = GetCacheName(filepath, flags);
 				fs::create_directories(cacheFilepath.parent_path());
 				ThrowIfFailed(DirectX::SaveToDDSFile(scratchImage.GetImages(), scratchImage.GetImageCount(), metadata, DirectX::DDS_FLAGS_NONE, cacheFilepath.c_str()));
 			}
@@ -150,19 +177,56 @@ namespace {
 		return true;
 	}
 
+	DxTexture LoadTextureFromCache(const char* filename, uint32 flags) {
+		fs::path filepath = GetFilepath(filename, flags);
+
+		if (filepath.extension() != ".dds") {
+			CacheImageToDDS(filepath, flags);
+			filepath = GetCacheName(filepath, flags);
+		}
+
+		DxContext& dxContext = DxContext::Instance();
+		DxCommandList* cl = dxContext.GetFreeRenderCommandList();
+
+		DxTexture result;
+		DxResource intermediateResource;
+		ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(dxContext.GetDevice().Get(), cl->CommandList.Get(),
+		filepath.c_str(), result.Resource, intermediateResource));
+		dxContext.RetireObject(intermediateResource);
+		CD3DX12_RESOURCE_DESC resourceDesc(result.Resource->GetDesc());
+
+		result.FormatSupport.Format = resourceDesc.Format;
+		ThrowIfFailed(dxContext.GetDevice()->CheckFeatureSupport(
+			D3D12_FEATURE_FORMAT_SUPPORT,
+			&result.FormatSupport,
+			sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)
+		));
+
+		if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 and result.FormatSupportsRTV()) {
+			result.RTVHandles = dxContext.PushRenderTargetView(&result);
+		}
+
+		if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 and result.FormatSupportsDSV()) {
+			result.DSVHandle = dxContext.PushDepthStencilView(&result);
+		}
+
+		dxContext.ExecuteCommandList(cl);
+		return result;
+	}
+
 	DxTexture LoadTextureInternal(const char* filename, uint32 flags) {
 		DirectX::ScratchImage scratchImage;
 		D3D12_RESOURCE_DESC textureDesc;
 
 		LoadImageFromFile(filename, flags, scratchImage, textureDesc);
-
 		const DirectX::Image* images = scratchImage.GetImages();
-		uint32 numImages = (uint32)scratchImage.GetImageCount();
+		auto numImages = (uint32)scratchImage.GetImageCount();
 
 		D3D12_SUBRESOURCE_DATA subresources[64];
 		for (uint32 i = 0; i < numImages; i++) {
-			D3D12_SUBRESOURCE_DATA subresource = subresources[i];
+			D3D12_SUBRESOURCE_DATA& subresource = subresources[i];
 			subresource.RowPitch = images[i].rowPitch;
+			subresource.SlicePitch = images[i].slicePitch;
 			subresource.pData = images[i].pixels;
 		}
 
@@ -171,12 +235,15 @@ namespace {
 	}
 }
 
-void DxTexture::UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, uint32 firstSubresource, uint32 numSubresources) {
+void DxTexture::UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, uint32 firstSubresource, uint32 numSubresource) {
 	DxContext& dxContext = DxContext::Instance();
 	DxCommandList* commandList = dxContext.GetFreeCopyCommandList();
-	commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+	// commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(Resource.Get(),
+	D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+	commandList->CommandList->ResourceBarrier(1, &barrier);
 
-	uint64 requiredSize = GetRequiredIntermediateSize(Resource.Get(), firstSubresource, numSubresources);
+	uint64 requiredSize = GetRequiredIntermediateSize(Resource.Get(), firstSubresource, numSubresource);
 
 	DxResource intermediateResource;
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -190,7 +257,9 @@ void DxTexture::UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, u
 		IID_PPV_ARGS(intermediateResource.GetAddressOf())
 	));
 
-	UpdateSubresources<128>(commandList->CommandList.Get(), Resource.Get(), intermediateResource.Get(), 0, firstSubresource, numSubresources, subresourceData);
+	SetName(commandList->CommandList, "Copy command list");
+	SetName(Resource, "Copy destination");
+	UpdateSubresources(commandList->CommandList.Get(), Resource.Get(), intermediateResource.Get(), 0, 0, numSubresource, subresourceData);
 	dxContext.RetireObject(intermediateResource);
 
 	// We are omitting the transition to common here, since the resource automatically decays to common state after being accessed on a copy queue.
@@ -220,7 +289,7 @@ void DxTexture::Update(const char *filename, uint32 flags) {
 }
 
 DxTexture DxTexture::LoadFromFile(const char *filename, uint32 flags) {
-	DxTexture result = LoadTextureInternal(filename, flags);
+	DxTexture result = LoadTextureFromCache(filename, flags);
 	// Todo: cache
 	return result;
 }
@@ -278,9 +347,7 @@ DxTexture DxTexture::Create(const void* data, uint32 width, uint32 height, DXGI_
 
 		return Create(textureDesc, &subresource, 1, initialState);
 	}
-	else {
-		return Create(textureDesc, nullptr, 0, initialState);
-	}
+	return Create(textureDesc, nullptr, 0, initialState);
 }
 
 DxTexture DxTexture::CreateDepth(uint32 width, uint32 height, DXGI_FORMAT format) {

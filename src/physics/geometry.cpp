@@ -465,7 +465,7 @@ DxMesh CpuMesh::CreateDxMesh() const {
 
 #define GetVertexProperty(prop, base, info, type) *(type*)(base + info.prop##Offset)
 
-DxVertexBuffer CpuMesh::CreateVertexBufferWithAlternativeLayout(DxContext* context, uint32 otherFlags, bool allowUnorderedAccess) {
+DxVertexBuffer CpuMesh::CreateVertexBufferWithAlternativeLayout(uint32 otherFlags, bool allowUnorderedAccess) const {
 #ifdef _DEBUG
 	for (uint32 i = 0; i < 31; i++) {
 		uint32 testFlag = (1 << i);

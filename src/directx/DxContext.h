@@ -57,6 +57,9 @@ public:
 	DxFactory GetFactory() const {
 		return _factory;
 	}
+	DxAdapter GetAdapter() const {
+		return _adapter;
+	}
 	DxDescriptorRange AllocateContiguousDescriptorRange(uint32 numDescriptors) {
 		return _frameDescriptorAllocator.AllocateContiguousDescriptorRange(numDescriptors);
 	}

@@ -46,7 +46,7 @@ public:
 	SubmeshInfo PushAssimpMesh(const struct aiMesh* mesh, float scale, AABBCollider* aabb = nullptr);
 
 	DxMesh CreateDxMesh() const;
-	DxVertexBuffer CreateVertexBufferWithAlternativeLayout(DxContext* context, uint32 otherFlags, bool allowUnorderedAccess = false);
+	DxVertexBuffer CreateVertexBufferWithAlternativeLayout(uint32 otherFlags, bool allowUnorderedAccess = false) const;
 
 private:
 	void AlignNextTriangle();

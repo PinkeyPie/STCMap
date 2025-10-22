@@ -1,8 +1,8 @@
 #define RS \
 "RootFlags(0), " \
 "RootConstants(b0, num32BitConstants=4), " \
-"DescriptorTable(SRV(t0, numDescriptors=1, flags=DESCRIPTOR_VOLATILE)), " \
-"DescriptorTable(UAV(u0, numDescriptors=5, flags=DESCRIPTOR_VOLATILE)), " \
+"DescriptorTable(SRV(t0, numDescriptors=1, flags=DESCRIPTORS_VOLATILE)), " \
+"DescriptorTable(UAV(u0, numDescriptors=5, flags=DESCRIPTORS_VOLATILE)), " \
 "StaticSampler(s0," \
     "addressU=TEXTURE_ADDRESS_WRAP," \
     "addressV=TEXTURE_ADDRESS_WRAP," \

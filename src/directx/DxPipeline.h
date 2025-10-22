@@ -232,7 +232,7 @@ public:
 	void CreateAllReloadablePipelines();
 	void CheckForChangedPipelines();
 	DxPipeline CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files,
-		DxRootSignature userRootSignature = nullptr);
+		DxRootSignature userRootSignature);
 	DxPipeline CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files,
 		const char* rootSignatureFile = nullptr); // If RS file is null, it will take the pixel shader by default
 
@@ -245,7 +245,7 @@ private:
 	};
 
 	struct ReloadablePipelineState {
-		PipelineType Type;
+		PipelineType Type = EPipelineTypeGraphics;
 
 		union {
 			struct {
@@ -265,7 +265,7 @@ private:
 
 		D3D12_INPUT_ELEMENT_DESC InputLayout[16] = {};
 
-		ReloadablePipelineState() = default;
+		ReloadablePipelineState() {}
 
 		void Initialize(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files, DxRootSignature* rootSignature);
 		void Initialize(const char* file, DxRootSignature* rootSignature);
@@ -292,8 +292,8 @@ private:
 
 	std::unordered_map<std::string, ShaderFile> _shaderBlobs = {};
 	std::deque<ReloadablePipelineState> _pipelines = {};
-	std::deque<ReloadableRootSignature> _rootSignatureFromFiles;
-	std::deque<DxRootSignature> _userRootSignatures;
+	std::deque<ReloadableRootSignature> _rootSignatureFromFiles = {};
+	std::deque<DxRootSignature> _userRootSignatures = {};
 
 	std::vector<ReloadablePipelineState*> _dirtyPipelines = {};
 	std::vector<ReloadableRootSignature*> _dirtyRootSignatures = {};

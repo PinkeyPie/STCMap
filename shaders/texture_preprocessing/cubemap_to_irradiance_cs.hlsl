@@ -1,8 +1,8 @@
 #define RS \
 "RootFlags(0)," \
 "RootConstants(b0, num32BitConstants=2)," \
-"DescriptorTable(SRV(t0, numDescriptors=1), flags=DESCRIPTORS_VOLATILE))," \
-"DescriptorTable(UAV(u0, numDescriptors=1), flags=DESCRIPTORS_VOLATILE))" \
+"DescriptorTable(SRV(t0, numDescriptors=1, flags=DESCRIPTORS_VOLATILE))," \
+"DescriptorTable(UAV(u0, numDescriptors=1, flags=DESCRIPTORS_VOLATILE))," \
 "StaticSampler(s0," \
     "addressU=TEXTURE_ADDRESS_WRAP," \
     "addressV=TEXTURE_ADDRESS_WRAP," \
@@ -61,7 +61,7 @@ static const float3x3 RotateUV[6] = {
 };
 
 [RootSignature(RS)]
-[numThreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
+[numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(CsInput input) 
 {
     uint3 texCoord = input.DispatchThreadId;

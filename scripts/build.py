@@ -18,6 +18,8 @@ def compile_shader(relative_path: str) -> None:
 		shader_type = 'ps'
 	elif shader_name.endswith('vs'):
 		shader_type = 'vs'
+	elif shader_name.endswith('cs'):
+		shader_type = 'cs'
 	else:
 		return
 
@@ -29,10 +31,6 @@ def compile_shader(relative_path: str) -> None:
 
 
 def compile_shaders(dirname):
-	if os.path.exists(os.path.join(shaders_dir, "bin")):
-		shutil.rmtree(os.path.join(shaders_dir, "bin"))
-	os.mkdir(os.path.join(shaders_dir, "bin"))
-
 	abs_path = os.path.join(shaders_dir, dirname)
 	files = os.listdir(abs_path)
 	for file in files:
@@ -43,4 +41,7 @@ def compile_shaders(dirname):
 			compile_shader(file)
 
 if __name__ == "__main__":
+	if os.path.exists(os.path.join(shaders_dir, "bin")):
+		shutil.rmtree(os.path.join(shaders_dir, "bin"))
+	os.mkdir(os.path.join(shaders_dir, "bin"))
 	compile_shaders('')
