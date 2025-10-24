@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <mutex>
 
 #include "dx.h"
@@ -8,33 +9,29 @@
 #include "../core/threading.h"
 
 struct DxAllocation {
-	void* CpuPtr;
+	uint8* CpuPtr;
 	D3D12_GPU_VIRTUAL_ADDRESS GpuPtr;
 };
 
 struct DxPage {
-	DxResource Buffer;
-	DxPage* Next;
+	DxAllocation Base = {};
 
-	uint8* CpuBasePtr;
-	D3D12_GPU_VIRTUAL_ADDRESS GpuBasePtr;
+	DxPage(uint64 pageSize);
+	void Init(ID3D12Device* device);
+	uint64 GetOffset() const { return _currentOffset; }
+	bool CheckAvailableSpace(uint64 size) const { return size < _pageSize - _currentOffset; }
+	DxAllocation GetAllocation(uint64 offset, uint64 alignment);
 
-	uint64 PageSize;
-	uint64 CurrentOffset;
+private:
+	DxResource _buffer = nullptr;
+	uint64 _pageSize;
+	uint64 _currentOffset = 0;
 };
 
 class DxPagePool {
 public:
-	DxPagePool() = default;
+	DxPagePool(uint64 pageSize) : _pageSize(pageSize) {}
 
-	MemoryArena Arena;
-	DxDevice Device;
-
-	std::mutex Mutex = {};
-
-	uint64 PageSize = 0;
-	DxPage* FreePages = nullptr;
-	DxPage* UsedPages = nullptr;
 	DxPage* LastUsedPage = nullptr;
 
 	DxPage* GetFreePage();
@@ -42,7 +39,12 @@ public:
 	void Reset();
 
 private:
-	DxPage* AllocateNewPage();
+	std::deque<DxPage*> _freePages = {};
+	std::deque<DxPage*> _usedPages = {};
+	DxPage* _lastUsedPage = nullptr;
+	uint64 _pageSize;
+
+	std::mutex _mutex = {};
 };
 
 class DxUploadBuffer {

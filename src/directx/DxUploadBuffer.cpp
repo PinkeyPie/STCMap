@@ -1,76 +1,78 @@
 #include "DxUploadBuffer.h"
+
+#include "DxContext.h"
 #include "../core/memory.h"
 
-DxPage* DxPagePool::AllocateNewPage() {
-	Mutex.lock();
-	auto result = static_cast<DxPage*>(Arena.Allocate(sizeof(DxPage), true));
-	Mutex.unlock();
+DxPage::DxPage(uint64 pageSize) : _pageSize(pageSize) {}
 
-	auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(PageSize);
+void DxPage::Init(ID3D12Device* device) {
+	auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(_pageSize);
+	auto heapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 
-	auto heapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
-
-	ThrowIfFailed(Device->CreateCommittedResource(
+	ThrowIfFailed(device->CreateCommittedResource(
 		&heapDesc,
 		D3D12_HEAP_FLAG_NONE,
 		&resourceDesc,
 		D3D12_RESOURCE_STATE_GENERIC_READ,
 		nullptr,
-		IID_PPV_ARGS(result->Buffer.GetAddressOf())
+		IID_PPV_ARGS(_buffer.GetAddressOf())
 	));
 
-	result->GpuBasePtr = result->Buffer->GetGPUVirtualAddress();
-	result->Buffer->Map(0, nullptr, (void**)&result->CpuBasePtr);
-	result->PageSize = PageSize;
-
-	return result;
+	Base.GpuPtr = _buffer->GetGPUVirtualAddress();
+	_buffer->Map(0, nullptr, (void**)&Base.CpuPtr);
 }
 
 DxPage* DxPagePool::GetFreePage() {
-	Mutex.lock();
-	DxPage* result = FreePages;
-	if (result) {
-		FreePages = result->Next;
-	}
-	Mutex.unlock();
+	_mutex.lock();
+	DxPage* page = nullptr;
 
-	if (not result) {
-		result = AllocateNewPage();
+	if (!_freePages.empty()) {
+		page = _freePages.front();
+		_freePages.pop_front();
+	}
+	_mutex.unlock();
+
+	if (not page) {
+		DxDevice device = DxContext::Instance().GetDevice();
+		page = new DxPage{_pageSize};
+		page->Init(device.Get());
 	}
 
-	result->CurrentOffset = 0;
+	return page;
+}
+
+void DxPagePool::ReturnPage(DxPage* page) {
+	std::lock_guard lock(_mutex);
+	_usedPages.push_back(page);
+	if (!LastUsedPage) {
+		LastUsedPage = page;
+	}
+}
+
+void DxPagePool::Reset() {
+	LastUsedPage = nullptr;
+	std::ranges::copy(_usedPages, _freePages.begin());
+	_usedPages.clear();
+}
+
+DxAllocation DxPage::GetAllocation(uint64 size, uint64 alignment) {
+	DxAllocation result;
+
+	uint64 offset = _currentOffset == 0 ? AlignTo(_currentOffset, alignment) : 0;
+	result.CpuPtr = Base.CpuPtr + offset;
+	result.GpuPtr = Base.GpuPtr + offset;
+
+	_currentOffset += offset + size;
 
 	return result;
 }
 
-void DxPagePool::ReturnPage(DxPage* page) {
-	Mutex.lock();
-	page->Next = UsedPages;
-	UsedPages = page;
-	if (!LastUsedPage) {
-		LastUsedPage = page;
-	}
-	Mutex.unlock();
-}
-
-void DxPagePool::Reset() {
-	if (LastUsedPage) {
-		LastUsedPage->Next = FreePages;
-	}
-	FreePages = UsedPages;
-	UsedPages = nullptr;
-	LastUsedPage = nullptr;
-}
-
 DxAllocation DxUploadBuffer::Allocate(uint64 size, uint64 alignment) {
-	assert(size <= PagePool->PageSize);
-
-	uint64 alignedOffset = CurrentPage ? AlignTo(CurrentPage->CurrentOffset, alignment) : 0;
+	uint64 alignedOffset = CurrentPage ? AlignTo(CurrentPage->GetOffset(), alignment) : 0;
 
 	DxPage* page = CurrentPage;
-	if (not page or alignedOffset + size > page->PageSize) {
+	if (not page or page->CheckAvailableSpace(alignedOffset + size)) {
 		page = PagePool->GetFreePage();
-		alignedOffset = 0;
 
 		if (CurrentPage) {
 			PagePool->ReturnPage(CurrentPage);
@@ -78,13 +80,7 @@ DxAllocation DxUploadBuffer::Allocate(uint64 size, uint64 alignment) {
 		CurrentPage = page;
 	}
 
-	DxAllocation result;
-	result.CpuPtr = page->CpuBasePtr + alignedOffset;
-	result.GpuPtr = page->GpuBasePtr + alignedOffset;
-
-	page->CurrentOffset = alignedOffset + size;
-
-	return result;
+	return page->GetAllocation(size, alignment);
 }
 
 void DxUploadBuffer::Reset() {

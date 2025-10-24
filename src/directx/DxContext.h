@@ -103,7 +103,7 @@ private:
 	DxRtvDescriptorHeap  _rtvAllocator = {};
 	DxDsvDescriptorHeap _dsvAllocator = {};
 
-	DxPagePool _pagePools[NUM_BUFFERED_FRAMES] = {};
+	DxPagePool _pagePools[NUM_BUFFERED_FRAMES] = {{MB(2)}, {MB(2)}};
 	DxFrameDescriptorAllocator _frameDescriptorAllocator = {};
 
 	volatile bool _running = true;

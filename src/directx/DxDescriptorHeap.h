@@ -1,6 +1,8 @@
 #pragma once
 
+#include <deque>
 #include <mutex>
+#include <stack>
 
 #include "../pch.h"
 #include "../core/threading.h"
@@ -113,13 +115,19 @@ public:
 };
 
 struct DxDescriptorPage {
-	Com<ID3D12DescriptorHeap> DescriptorHeap;
-	DxDescriptorHandle Base;
-	uint32 UsedDescriptors;
-	uint32 MaxNumDescriptors;
-	uint32 DescriptorHandleIncrementSize;
+	DxDescriptorPage(uint32 maxNumDescriptors);
 
-	DxDescriptorPage* Next;
+	void Init(ID3D12Device* device, D3D12_DESCRIPTOR_HEAP_TYPE type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_FLAGS flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE);
+	DxDescriptorRange GetRange(uint32 count);
+	bool HaveEnoughSpace(uint32 count) const;
+	void Reset();
+
+private:
+	Com<ID3D12DescriptorHeap> _descriptorHeap = nullptr;
+	DxDescriptorHandle _base = {};
+	uint32 _usedDescriptors = 0;
+	uint32 _maxNumDescriptors = 0;
+	uint32 _descriptorHandleIncrementSize = 0;
 };
 
 class DxFrameDescriptorAllocator {
@@ -137,8 +145,8 @@ protected:
 	DxDevice _device = nullptr;
 
 	std::mutex _mutex = {};
-	DxDescriptorPage* _usedPages[NUM_BUFFERED_FRAMES] = {};
-	DxDescriptorPage* _freePages = nullptr;
+	std::stack<DxDescriptorPage*> _usedPages[NUM_BUFFERED_FRAMES] = {};
+	std::stack<DxDescriptorPage*> _freePages = {};
 	uint32 _currentFrame = NUM_BUFFERED_FRAMES - 1;
 };
 

@@ -319,7 +319,7 @@ DxTexture DxTexture::Create(D3D12_RESOURCE_DESC textureDesc, D3D12_SUBRESOURCE_D
 		result.RTVHandles = dxContext.PushRenderTargetView(&result);
 	}
 
-	if ((textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 9 and (result.FormatSupportsDSV() or IsDepthFormat(textureDesc.Format))) {
+	if ((textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 and (result.FormatSupportsDSV() or IsDepthFormat(textureDesc.Format))) {
 		result.DSVHandle = dxContext.PushDepthStencilView(&result);
 	}
 

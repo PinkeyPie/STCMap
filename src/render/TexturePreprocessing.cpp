@@ -290,15 +290,15 @@ DxTexture TexturePreprocessor::EquirectangularToCubemap(DxCommandList *cl, DxTex
 
     for (uint32 mipSlice = 0; mipSlice < numMips;) {
         // Maximum number of mips to generate per pass is 5
-        uint32 numMips = min(5, cubemapDesc.MipLevels - mipSlice);
+        uint32 mipCount = min(5, cubemapDesc.MipLevels - mipSlice);
 
         equirectangularToCubemapCb.FirstMipLevel = mipSlice;
         equirectangularToCubemapCb.CubemapSize = max((uint32)cubemapDesc.Width, cubemapDesc.Height) >> mipSlice;
-        equirectangularToCubemapCb.NumMipLevels = numMips;
+        equirectangularToCubemapCb.NumMipLevels = mipCount;
 
         cl->SetCompute32BitConstants(0, equirectangularToCubemapCb);
 
-        for (uint32 mip = 0; mip < numMips; mip++) {
+        for (uint32 mip = 0; mip < mipCount; mip++) {
             DxDescriptorHandle h = descriptors.Push2DTextureArrayUAV(stagingTexture, mipSlice + mip, GetUAVCompatibleFormat(cubemapDesc.Format));
             if (mip == 0) {
                 cl->SetComputeDescriptorTable(2, h);
@@ -307,7 +307,7 @@ DxTexture TexturePreprocessor::EquirectangularToCubemap(DxCommandList *cl, DxTex
 
         cl->Dispatch(bucketize(equirectangularToCubemapCb.CubemapSize, 16), bucketize(equirectangularToCubemapCb.CubemapSize, 16), 6);
 
-        mipSlice += numMips;
+        mipSlice += mipCount;
     }
 
     if (stagingResource != cubemapResource) {
@@ -403,14 +403,14 @@ DxTexture TexturePreprocessor::PrefilterEnvironment(DxCommandList *cl, DxTexture
     assert(environment.Resource);
 
     DxContext& dxContext = DxContext::Instance();
-    CD3DX12_RESOURCE_DESC prefilteredDesc(environment.Resource->GetDesc());
-    prefilteredDesc.Width = prefilteredDesc.Height = resolution;
-    prefilteredDesc.DepthOrArraySize = 6;
-    prefilteredDesc.MipLevels = 0;
+    CD3DX12_RESOURCE_DESC prefilteredCreationDesc(environment.Resource->GetDesc());
+    prefilteredCreationDesc.Width = prefilteredCreationDesc.Height = resolution;
+    prefilteredCreationDesc.DepthOrArraySize = 6;
+    prefilteredCreationDesc.MipLevels = 0;
 
-    DxTexture prefiltered = DxTexture::Create(prefilteredDesc, nullptr, 0);
+    DxTexture prefiltered = DxTexture::Create(prefilteredCreationDesc, nullptr, 0);
 
-    prefilteredDesc = CD3DX12_RESOURCE_DESC(prefiltered.Resource->GetDesc());
+    auto prefilteredDesc = CD3DX12_RESOURCE_DESC(prefiltered.Resource->GetDesc());
 
     DxResource prefilteredResource = prefiltered.Resource;
     DxResource stagingResource = prefilteredResource;

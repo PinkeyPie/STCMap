@@ -107,11 +107,6 @@ void DxContext::Initialize() {
 	_arena.MinimumBlockSize = MB(2);
 	_bufferFrameId = NUM_BUFFERED_FRAMES - 1;
 
-	for (uint32 i = 0; i < NUM_BUFFERED_FRAMES; i++) {
-		_pagePools[i].Device = _device;
-		_pagePools[i].PageSize = MB(2);
-	}
-
 	RenderQueue.Initialize(_device);
 	ComputeQueue.Initialize(_device);
 	CopyQueue.Initialize(_device);
