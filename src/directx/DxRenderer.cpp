@@ -57,6 +57,7 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 		SetName(_depthBuffer.Resource, "HDR depth buffer");
 
 		_hdrColorTexture = DxTexture::Create(nullptr, _renderWidth, _renderHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, true);
+		SetName(_hdrColorTexture.Resource, "HDR Color texture");
 		_hdrColorTextureSrv = GlobalDescriptorHeap.Push2DTextureSRV(_hdrColorTexture);
 
 		_hdrRenderTarget.PushColorAttachment(_hdrColorTexture);
@@ -77,7 +78,8 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 		auto desc = CREATE_GRAPHICS_PIPELINE
 		.InputLayout(inputLayoutPositionUvNormal)
 		.RasterizeCounterClockwise()
-		.RenderTargets(_hdrRenderTarget.RenderTargetFormat, _hdrRenderTarget.DepthStencilFormat);
+		// .RenderTargets(_hdrRenderTarget.RenderTargetFormat, _hdrRenderTarget.DepthStencilFormat);
+		.RenderTargets(_windowRenderTarget.RenderTargetFormat, _hdrRenderTarget.DepthStencilFormat);
 
 		_modelPipeline = pipelineFactory->CreateReloadablePipeline(desc, {"model_vs", "model_ps"});
 	}
@@ -85,7 +87,8 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 	{
 		auto desc = CREATE_GRAPHICS_PIPELINE
 		.InputLayout(inputLayoutPosition)
-		.RenderTargets(_hdrRenderTarget.RenderTargetFormat)
+		// .RenderTargets(_hdrRenderTarget.RenderTargetFormat)
+		.RenderTargets(_windowRenderTarget.RenderTargetFormat)
 		.DepthSettings(false, false);
 
 		_proceduralSkyPipeline = pipelineFactory->CreateReloadablePipeline(desc, {"sky_vs", "sky_procedural_ps"});
@@ -111,11 +114,11 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 		_skyMesh = _mesh.CreateDxMesh();
 	}
 
-	RandomNumberGenerator rng = { 671823 };
+	RandomNumberGenerator rng = { 6718923 };
 
 	_meshTransforms = new trs[_numMeshes];
-	_meshModelMatrices = new mat4[_numMeshes];
-	for (uint32 i = 0; i < _numMeshes; i++) {
+	_meshModelMatrices = new mat4[_sceneMesh.SingleMeshes.size()];
+	for (uint32 i = 0; i < _sceneMesh.SingleMeshes.size(); i++) {
 		_meshTransforms[i].position.x = rng.RandomFloatBetween(-30.f, 30.f);
 		_meshTransforms[i].position.y = rng.RandomFloatBetween(-30.f, 30.f);
 		_meshTransforms[i].position.z = rng.RandomFloatBetween(-30.f, 30.f);
@@ -131,21 +134,22 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 
 	DxContext& dxContext = DxContext::Instance();
 	{
-		DxCommandList* cl = dxContext.GetFreeRenderCommandList();
-		DxTexture equiSky = DxTexture::LoadFromFile("assets/textures/aircraft_workshop_01_4k.hdr",
-			ETextureLoadFlagsNoncolor | ETextureLoadFlagsCacheToDds | ETextureLoadFlagsAllocateFullMipChain);
-		dxContext.RenderQueue.WaitForOtherQueue(dxContext.CopyQueue);
-		preprocessor->GenerateMipMapsOnGPU(cl, equiSky);
-		_environment.Sky = preprocessor->EquirectangularToCubemap(cl, equiSky, 2048, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
-		_environment.Prefiltered = preprocessor->PrefilterEnvironment(cl, _environment.Sky, 128);
-		_environment.Irradiance = preprocessor->CubemapToIrradiance(cl, _environment.Sky);
-		dxContext.ExecuteCommandList(cl);
+		// DxCommandList* cl = dxContext.GetFreeRenderCommandList();
+		// dxContext.RenderQueue.WaitForOtherQueue(dxContext.CopyQueue);
+		DxTexture sky = DxTexture::LoadFromFile("assets/textures/grasscube1024.dds",
+		ETextureLoadFlagsNoncolor | ETextureLoadFlagsCacheToDds | ETextureLoadFlagsAllocateFullMipChain);
+		// preprocessor->GenerateMipMapsOnGPU(cl, sky);
+		// _environment.Sky = preprocessor->EquirectangularToCubemap(cl, sky, 2048, 0, DXGI_FORMAT_R16G16B16A16_FLOAT);
+		_environment.Sky = sky;
+		// _environment.Prefiltered = preprocessor->PrefilterEnvironment(cl, _environment.Sky, 128);
+		// _environment.Irradiance = preprocessor->CubemapToIrradiance(cl, _environment.Sky);
+		// dxContext.ExecuteCommandList(cl);
 
 		_environment.SkyHandle = GlobalDescriptorHeap.PushCubemapSRV(_environment.Sky);
-		_environment.PrefilteredHandle = GlobalDescriptorHeap.PushCubemapSRV(_environment.Prefiltered);
-		_environment.IrradianceHandle = GlobalDescriptorHeap.PushCubemapSRV(_environment.Irradiance);
+		// _environment.PrefilteredHandle = GlobalDescriptorHeap.PushCubemapSRV(_environment.Prefiltered);
+		// _environment.IrradianceHandle = GlobalDescriptorHeap.PushCubemapSRV(_environment.Irradiance);
 
-		dxContext.RetireObject(equiSky.Resource);
+		// dxContext.RetireObject(sky.Resource);
 	}
 
 	memcpy(&_clearColor, DirectX::Colors::LightSteelBlue, sizeof(float) * 4);
@@ -226,10 +230,7 @@ int DxRenderer::DummyRender(float dt) {
 	DxCommandList* cl = dxContext.GetFreeRenderCommandList();
 
 	static uint32 meshLOD = 0;
-	static float meshSpeed = 1.f;
-
-	DXGI_QUERY_VIDEO_MEMORY_INFO memoryInfo;
-	ThrowIfFailed(dxContext.GetAdapter()->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &memoryInfo));
+	static float meshSpeed = 0.f;
 
 	quat meshDeltaRotation(vec3(0.f, 1.f, 0.f), 2.f * PI * 0.1f * meshSpeed * dt);
 	for (uint32 i = 0; i < _numMeshes; i++) {
@@ -242,21 +243,19 @@ int DxRenderer::DummyRender(float dt) {
 		_meshModelMatrices[i] = trsToMat4(_meshTransforms[i]);
 	}
 
-	CD3DX12_RECT scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
-
-	cl->SetScissor(scissorRect);
-
 	BarrierBatcher(cl)
-	.Transition(_windowRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET)
-	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	.Transition(_windowRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+	CD3DX12_RECT scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+	cl->SetScissor(scissorRect);
 
 	cl->SetDescriptorHeap(GlobalDescriptorHeap);
 
-	cl->SetRenderTarget(_hdrRenderTarget);
-	cl->SetViewport(_hdrRenderTarget.Viewport);
+	cl->CommandList->OMSetRenderTargets(1, &_windowRenderTarget.RtvHandles[0], FALSE, &_hdrRenderTarget.DsvHandle);
+	cl->ClearRTV(_windowRenderTarget.RtvHandles[0], _clearColor);
+	cl->SetViewport(_windowRenderTarget.Viewport);
 	cl->ClearDepth(_hdrRenderTarget.DsvHandle);
 
-	// Sky
 	cl->SetPipelineState(*_textureSkyPipeline.Pipeline);
 	cl->SetGraphicsRootSignature(*_textureSkyPipeline.RootSignature);
 	cl->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -279,28 +278,101 @@ int DxRenderer::DummyRender(float dt) {
 	for (uint32 i = 0; i < _numMeshes; i++) {
 		mat4& m = _meshModelMatrices[i];
 		cl->SetGraphics32BitConstants(MODEL_RS_MVP, TransformCb{_camera.ViewProj * m, m});
-		auto submesh = _sceneMesh.SingleMeshes[meshLOD].Submesh;
-		cl->DrawIndexed(submesh.NumTriangles * 3, 1, submesh.FirstTriangle * 3, submesh.BaseVertex, 0);
+		for (auto & singleMesh : _sceneMesh.SingleMeshes) {
+			auto submesh = singleMesh.Submesh;
+			cl->DrawIndexed(submesh.NumTriangles * 3, 1, submesh.FirstTriangle * 3, submesh.BaseVertex, 0);
+		}
 	}
 
-	// Present
 	BarrierBatcher(cl)
-	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-	cl->SetRenderTarget(_windowRenderTarget);
-	cl->SetViewport(_windowViewport);
-
-	cl->SetPipelineState(*_presentPipeline.Pipeline);
-	cl->SetGraphicsRootSignature(*_presentPipeline.RootSignature);
-
-	cl->SetGraphics32BitConstants(PRESENT_RS_TONEMAP, _tonemap);
-	cl->SetGraphics32BitConstants(PRESENT_RS_PRESENT, PresentCb{0, 0.f});
-	cl->SetGraphicsDescriptorTable(PRESENT_RS_TEX, _hdrColorTextureSrv);
-
-	BarrierBatcher(cl)
-	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON)
-	.Transition(_hdrRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
+	.Transition(_windowRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
+	_windowRenderTarget.ColorAttachments[0].Reset();
 
 	return dxContext.ExecuteCommandList(cl);
 }
+
+
+// int DxRenderer::DummyRender(float dt) {
+// 	DxContext& dxContext = DxContext::Instance();
+// 	DxCommandList* cl = dxContext.GetFreeRenderCommandList();
+//
+// 	static uint32 meshLOD = 0;
+// 	static float meshSpeed = 1.f;
+//
+// 	DXGI_QUERY_VIDEO_MEMORY_INFO memoryInfo;
+// 	ThrowIfFailed(dxContext.GetAdapter()->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &memoryInfo));
+//
+// 	quat meshDeltaRotation(vec3(0.f, 1.f, 0.f), 2.f * PI * 0.1f * meshSpeed * dt);
+// 	for (uint32 i = 0; i < _numMeshes; i++) {
+// 		vec3 position = _meshTransforms[i].position;
+// 		position = meshDeltaRotation * position;
+//
+// 		_meshTransforms[i].rotation = meshDeltaRotation * _meshTransforms[i].rotation;
+// 		_meshTransforms[i].position = position;
+//
+// 		_meshModelMatrices[i] = trsToMat4(_meshTransforms[i]);
+// 	}
+//
+// 	CD3DX12_RECT scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
+//
+// 	cl->SetScissor(scissorRect);
+//
+// 	BarrierBatcher(cl)
+// 	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+//
+// 	cl->SetDescriptorHeap(GlobalDescriptorHeap);
+//
+// 	cl->SetRenderTarget(_hdrRenderTarget);
+// 	cl->SetViewport(_hdrRenderTarget.Viewport);
+// 	cl->ClearDepth(_hdrRenderTarget.DsvHandle);
+//
+// 	// Sky
+// 	cl->SetPipelineState(*_textureSkyPipeline.Pipeline);
+// 	cl->SetGraphicsRootSignature(*_textureSkyPipeline.RootSignature);
+// 	cl->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+//
+// 	cl->SetGraphics32BitConstants(SKY_RS_VP, SkyCb{_camera.Proj * CreateSkyViewMatrix(_camera.View)});
+// 	cl->SetGraphicsDescriptorTable(SKY_RS_TEX, _environment.SkyHandle);
+//
+// 	cl->SetVertexBuffer(0, _skyMesh.VertexBuffer);
+// 	cl->SetIndexBuffer(_skyMesh.IndexBuffer);
+// 	cl->DrawIndexed(_skyMesh.IndexBuffer.ElementCount, 1, 0, 0, 0);
+//
+// 	// Models
+// 	cl->SetPipelineState(*_modelPipeline.Pipeline);
+// 	cl->SetGraphicsRootSignature((*_modelPipeline.RootSignature));
+// 	cl->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+// 	cl->SetVertexBuffer(0, _sceneMesh.Mesh.VertexBuffer);
+// 	cl->SetIndexBuffer(_sceneMesh.Mesh.IndexBuffer);
+// 	cl->SetGraphicsDescriptorTable(MODEL_RS_ALBEDO, _textureHandle);
+//
+// 	for (uint32 i = 0; i < _numMeshes; i++) {
+// 		mat4& m = _meshModelMatrices[i];
+// 		cl->SetGraphics32BitConstants(MODEL_RS_MVP, TransformCb{_camera.ViewProj * m, m});
+// 		auto submesh = _sceneMesh.SingleMeshes[meshLOD].Submesh;
+// 		cl->DrawIndexed(submesh.NumTriangles * 3, 1, submesh.FirstTriangle * 3, submesh.BaseVertex, 0);
+// 	}
+//
+// 	// Present
+// 	BarrierBatcher(cl)
+// 	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+// 	.Transition(_windowRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+//
+// 	cl->SetRenderTarget(_windowRenderTarget);
+// 	cl->SetViewport(_windowViewport);
+//
+// 	cl->SetPipelineState(*_presentPipeline.Pipeline);
+// 	cl->SetGraphicsRootSignature(*_presentPipeline.RootSignature);
+//
+// 	cl->SetGraphics32BitConstants(PRESENT_RS_TONEMAP, _tonemap);
+// 	cl->SetGraphics32BitConstants(PRESENT_RS_PRESENT, PresentCb{0, 0.f});
+// 	cl->SetGraphicsDescriptorTable(PRESENT_RS_TEX, _hdrColorTextureSrv);
+//
+// 	BarrierBatcher(cl)
+// 	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON)
+// 	.Transition(_windowRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
+//
+// 	_windowRenderTarget.ColorAttachments[0].Reset();
+// 	return dxContext.ExecuteCommandList(cl);
+// }
 

@@ -11,12 +11,11 @@ struct VsInput
 
 struct VsOutput
 {
-    float2 uv       : TEXCOORDS;
+    float2 uv       : TEXCOORD;
     float3 normal   : NORMAL;
     float4 position : SV_Position;
 };
 
-[RootSignature(MODEL_RS)]
 VsOutput main(VsInput vin)
 {
     VsOutput vout;

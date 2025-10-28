@@ -86,7 +86,7 @@ private:
 	DxDescriptorHandle _textureHandle;
 	trs* _meshTransforms;
 	mat4* _meshModelMatrices;
-	static constexpr uint32 _numMeshes = 1024;
+	static constexpr uint32 _numMeshes = 1;
 
 	DxMesh _skyMesh;
 	PbrEnvironment _environment;

@@ -52,32 +52,32 @@ CpuMesh::CpuMesh(CpuMesh&& mesh) {
 	Flags = mesh.Flags;
 	VertexSize = mesh.VertexSize;
 	SkinOffset = mesh.SkinOffset;
-	Vertices = mesh.Vertices;
-	Triangles = mesh.Triangles;
-	NumVertices = mesh.NumVertices;
-	NumTriangles = mesh.NumTriangles;
+	_vertices = mesh._vertices;
+	_triangles = mesh._triangles;
+	_numVertices = mesh._numVertices;
+	_numTriangles = mesh._numTriangles;
 
-	mesh.Vertices = 0;
-	mesh.Triangles = 0;
+	mesh._vertices = 0;
+	mesh._triangles = 0;
 }
 
 CpuMesh::~CpuMesh() {
-	if (Vertices) {
-		_aligned_free(Vertices);
+	if (_vertices) {
+		_aligned_free(_vertices);
 	}
-	if (Triangles) {
-		_aligned_free(Triangles);
+	if (_triangles) {
+		_aligned_free(_triangles);
 	}
 }
 
 void CpuMesh::AlignNextTriangle() {
 	// This is called when a new mesh is pushed. The function aligns the next index to a 16-byte boundary.
-	NumTriangles = AlignTo(NumTriangles, 8); // 8 triangles are 48 bytes, which is divisible by 16.
+	_numTriangles = AlignTo(_numTriangles, 8); // 8 triangles are 48 bytes, which is divisible by 16.
 }
 
 void CpuMesh::Reserve(uint32 vertexCount, uint32 triangleCount) {
-	Vertices = (uint8*)_aligned_realloc(Vertices, (NumVertices + vertexCount) * VertexSize, 64);
-	Triangles = (IndexedTriangle16*)_aligned_realloc(Triangles, (NumTriangles + triangleCount + 8) * sizeof(IndexedTriangle16), 64); // Allocate 8 more, such that we can align without problems.
+	_vertices = (uint8*)_aligned_realloc(_vertices, (_numVertices + vertexCount) * VertexSize, 64);
+	_triangles = (IndexedTriangle16*)_aligned_realloc(_triangles, (_numTriangles + triangleCount + 8) * sizeof(IndexedTriangle16), 64); // Allocate 8 more, such that we can align without problems.
 }
 
 /*
@@ -91,7 +91,7 @@ void CpuMesh::Reserve(uint32 vertexCount, uint32 triangleCount) {
 */
 
 void CpuMesh::PushVertex(vec3 position, vec2 uv, vec3 normal, vec3 tangent, SkinningWeights skin) {
-	uint8* ptrVertex = Vertices + VertexSize * NumVertices;
+	uint8* ptrVertex = _vertices + VertexSize * _numVertices;
 	if (Flags & EMeshCreationFlagsWithPositions) {
 		*reinterpret_cast<vec3*>(ptrVertex) = position;
 		ptrVertex += sizeof(vec3);
@@ -112,23 +112,23 @@ void CpuMesh::PushVertex(vec3 position, vec2 uv, vec3 normal, vec3 tangent, Skin
 		*(SkinningWeights*)ptrVertex = skin;
 		ptrVertex += sizeof(vec3);
 	}
-	++NumVertices;
+	++_numVertices;
 }
 
 
 void CpuMesh::PushTriangle(uint16 a, uint16 b, uint16 c) {
-	Triangles[NumTriangles++] = { a, b, c };
+	_triangles[_numTriangles++] = { a, b, c };
 }
 
 SubmeshInfo CpuMesh::PushQuad(vec2 radius) {
 	AlignNextTriangle();
 
-	uint32 baseVertex = NumVertices;
-	uint32 firstTriangle = NumTriangles;
+	uint32 baseVertex = _numVertices;
+	uint32 firstTriangle = _numTriangles;
 
 	Reserve(4, 2);
 
-	uint8* vertexPtr = Vertices + VertexSize * NumVertices;
+	uint8* vertexPtr = _vertices + VertexSize * _numVertices;
 
 	PushVertex(vec3(-radius.x, -radius.y, 0.f), vec2(0.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 0.f), {});
 	PushVertex(vec3(radius.x, -radius.y, 0.f), vec2(1.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 0.f), {});
@@ -149,8 +149,8 @@ SubmeshInfo CpuMesh::PushQuad(vec2 radius) {
 SubmeshInfo CpuMesh::PushCube(vec3 radius, bool flipWindingOrder) {
 	AlignNextTriangle();
 
-	uint32 baseVertex = NumVertices;
-	uint32 firstTriangle = NumTriangles;
+	uint32 baseVertex = _numVertices;
+	uint32 firstTriangle = _numTriangles;
 
 	if ((Flags & EMeshCreationFlagsWithPositions)
 		and not(Flags & EMeshCreationFlagsWithUvs)
@@ -158,16 +158,16 @@ SubmeshInfo CpuMesh::PushCube(vec3 radius, bool flipWindingOrder) {
 		and not(Flags & EMeshCreationFlagsWithTangents)) {
 		Reserve(8, 12);
 
-		uint8* vertexPtr = Vertices + VertexSize * NumVertices;
+		uint8* vertexPtr = _vertices + VertexSize * _numVertices;
 
 		PushVertex(vec3(-radius.x, -radius.y, radius.z), {}, {}, {}, {}); // 0
 		PushVertex(vec3(radius.x, -radius.y, radius.z), {}, {}, {}, {}); // x
 		PushVertex(vec3(-radius.x, radius.y, radius.z), {}, {}, {}, {}); // y
 		PushVertex(vec3(radius.x, radius.y, radius.z), {}, {}, {}, {}); // xy
-		PushVertex(vec3(-radius.x, -radius.y, radius.z), {}, {}, {}, {}); // xz
+		PushVertex(vec3(-radius.x, -radius.y, -radius.z), {}, {}, {}, {}); // z
 		PushVertex(vec3(radius.x, -radius.y, -radius.z), {}, {}, {}, {}); // xz
 		PushVertex(vec3(-radius.x, radius.y, -radius.z), {}, {}, {}, {}); // yz
-		PushVertex(vec3(radius.x, radius.y, -radius.z), {}, {}, {}, {}); // xuz
+		PushVertex(vec3(radius.x, radius.y, -radius.z), {}, {}, {}, {}); // xyz
 
 		PushTriangle(0, 1, 2);
 		PushTriangle(1, 3, 2);
@@ -185,7 +185,7 @@ SubmeshInfo CpuMesh::PushCube(vec3 radius, bool flipWindingOrder) {
 	else {
 		Reserve(24, 32);
 
-		uint8* vertexPtr = Vertices + VertexSize * NumVertices;
+		uint8* vertexPtr = _vertices + VertexSize * _numVertices;
 
 		PushVertex(vec3(-radius.x, -radius.y, radius.z), vec2(0.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 0.f), {});
 		PushVertex(vec3(radius.x, -radius.y, radius.z), vec2(1.f, 0.f), vec3(0.f, 0.f, 1.f), vec3(0.f, 1.f, 0.f), {});
@@ -227,10 +227,10 @@ SubmeshInfo CpuMesh::PushCube(vec3 radius, bool flipWindingOrder) {
 	}
 
 	if (flipWindingOrder) {
-		for (uint32 i = NumTriangles - 12; i < NumTriangles; i++) {
-			uint16 tmp = Triangles[i].B;
-			Triangles[i].B = Triangles[i].C;
-			Triangles[i].C = tmp;
+		for (uint32 i = _numTriangles - 12; i < _numTriangles; i++) {
+			uint16 tmp = _triangles[i].B;
+			_triangles[i].B = _triangles[i].C;
+			_triangles[i].C = tmp;
 		}
 	}
 
@@ -238,15 +238,15 @@ SubmeshInfo CpuMesh::PushCube(vec3 radius, bool flipWindingOrder) {
 	result.FirstTriangle = firstTriangle;
 	result.NumTriangles = 12;
 	result.BaseVertex = baseVertex;
-	result.NumVertices = NumVertices - baseVertex;
+	result.NumVertices = _numVertices - baseVertex;
 	return result;
 }
 
 SubmeshInfo CpuMesh::PushSphere(uint16 slices, uint16 rows, float radius) {
 	AlignNextTriangle();
 
-	uint32 baseVertex = NumVertices;
-	uint32 firstTriangle = NumTriangles;
+	uint32 baseVertex = _numVertices;
+	uint32 firstTriangle = _numTriangles;
 
 	assert(slices > 2);
 	assert(rows > 0);
@@ -304,15 +304,15 @@ SubmeshInfo CpuMesh::PushSphere(uint16 slices, uint16 rows, float radius) {
 	result.FirstTriangle = firstTriangle;
 	result.NumTriangles = 2 * rows * slices;
 	result.BaseVertex = baseVertex;
-	result.NumVertices = NumVertices - baseVertex;
+	result.NumVertices = _numVertices - baseVertex;
 	return result;
 }
 
 SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float radius) {
 	AlignNextTriangle();
 
-	uint32 baseVertex = NumVertices;
-	uint32 firstTriangle = NumTriangles;
+	uint32 baseVertex = _numVertices;
+	uint32 firstTriangle = _numTriangles;
 
 	assert(slices > 2);
 	assert(rows > 0);
@@ -327,7 +327,7 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 
 	Reserve(slices * (rows + 1) + 2, 2 * (rows + 1) * slices);
 
-	uint8* vertexPtr = Vertices + VertexSize * NumVertices;
+	uint8* vertexPtr = _vertices + VertexSize * _numVertices;
 
 	// Vertices.
 	PushVertex(vec3(0.f, -radius - halfHeight, 0.f), DirectionToPanoramaUv(vec3(0.f, -1.f, 0.f)), vec3(0.f, -1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
@@ -392,31 +392,28 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 	result.FirstTriangle = firstTriangle;
 	result.NumTriangles = 2 * (rows + 1) * slices;
 	result.BaseVertex = baseVertex;
-	result.NumVertices = NumVertices - baseVertex;
+	result.NumVertices = _numVertices - baseVertex;
 	return result;
 }
 
 SubmeshInfo CpuMesh::PushAssimpMesh(const struct aiMesh* mesh, float scale, AABBCollider *aabb) {
 	AlignNextTriangle();
 
-	uint32 baseVertex = NumVertices;
-	uint32 firstTriangle = NumTriangles;
+	uint32 baseVertex = _numVertices;
+	uint32 firstTriangle = _numTriangles;
 
 	assert(mesh->mNumVertices <= UINT16_MAX);
 
 	Reserve(mesh->mNumVertices, mesh->mNumFaces);
-
-	uint8* vertexPtr = Vertices + VertexSize * NumVertices;
-
 	vec3 position(0.f, 0.f, 0.f);
 	vec3 normal(0.f,0.f,0.f);
 	vec3 tangent(0.f,0.f,0.f);
 	vec2 uv(0.f,0.f);
 
-	bool hasPositions = mesh->HasPositions();
-	bool hasNormals = mesh->HasNormals();
-	bool hasTangents = mesh->HasTangentsAndBitangents();
-	bool hasUVs = mesh->HasTextureCoords(0);
+	const bool hasPositions = mesh->HasPositions();
+	const bool hasNormals = mesh->HasNormals();
+	const bool hasTangents = mesh->HasTangentsAndBitangents();
+	const bool hasUVs = mesh->HasTextureCoords(0);
 
 	if (aabb) {
 		*aabb = AABBCollider::NegativeInfinity();
@@ -447,19 +444,20 @@ SubmeshInfo CpuMesh::PushAssimpMesh(const struct aiMesh* mesh, float scale, AABB
 		PushTriangle(face.mIndices[0], face.mIndices[1], face.mIndices[2]);
 	}
 
-	SubmeshInfo result;
+	SubmeshInfo result = {};
 	result.FirstTriangle = firstTriangle;
 	result.NumTriangles = mesh->mNumFaces;
 	result.BaseVertex = baseVertex;
 	result.NumVertices = mesh->mNumVertices;
+
 	return result;
 }
 
 
 DxMesh CpuMesh::CreateDxMesh() const {
 	DxMesh result;
-	result.VertexBuffer = DxVertexBuffer::Create(VertexSize, NumVertices, Vertices);
-	result.IndexBuffer = DxIndexBuffer::Create(sizeof(uint16), NumTriangles * 3, Triangles);
+	result.VertexBuffer = DxVertexBuffer::Create(VertexSize, _numVertices, _vertices);
+	result.IndexBuffer = DxIndexBuffer::Create(sizeof(uint16), _numTriangles * 3, _triangles);
 	return result;
 }
 
@@ -477,10 +475,10 @@ DxVertexBuffer CpuMesh::CreateVertexBufferWithAlternativeLayout(uint32 otherFlag
 	VertexInfo ownInfo = GetVertexInfo(Flags);
 	VertexInfo newInfo = GetVertexInfo(otherFlags);
 
-	uint8* newVertices = (uint8*)malloc(newInfo.VertexSize * NumVertices);
+	uint8* newVertices = (uint8*)malloc(newInfo.VertexSize * _numVertices);
 
-	for (uint32 i = 0; i < NumVertices; i++) {
-		uint8* ownBase = Vertices + i * ownInfo.VertexSize;
+	for (uint32 i = 0; i < _numVertices; i++) {
+		uint8* ownBase = _vertices + i * ownInfo.VertexSize;
 		uint8* newBase = newVertices + i * newInfo.VertexSize;
 
 		if (otherFlags & EMeshCreationFlagsWithPositions) {
@@ -500,7 +498,7 @@ DxVertexBuffer CpuMesh::CreateVertexBufferWithAlternativeLayout(uint32 otherFlag
 		}
 	}
 
-	DxVertexBuffer vertexBuffer = DxVertexBuffer::Create(newInfo.VertexSize, NumVertices, newVertices, allowUnorderedAccess);
+	DxVertexBuffer vertexBuffer = DxVertexBuffer::Create(newInfo.VertexSize, _numVertices, newVertices, allowUnorderedAccess);
 	free(newVertices);
 	return vertexBuffer;
 }

@@ -173,6 +173,9 @@ namespace {
 				assert(false);
 				break;
 		}
+		textureDesc.Alignment = 0;
+		textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+		textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
 		return true;
 	}
@@ -194,6 +197,7 @@ namespace {
 		filepath.c_str(), result.Resource, intermediateResource));
 		dxContext.RetireObject(intermediateResource);
 		CD3DX12_RESOURCE_DESC resourceDesc(result.Resource->GetDesc());
+		resourceDesc.MipLevels = 0;
 
 		result.FormatSupport.Format = resourceDesc.Format;
 		ThrowIfFailed(dxContext.GetDevice()->CheckFeatureSupport(
@@ -222,15 +226,15 @@ namespace {
 		const DirectX::Image* images = scratchImage.GetImages();
 		auto numImages = (uint32)scratchImage.GetImageCount();
 
-		D3D12_SUBRESOURCE_DATA subresources[64];
+		std::unique_ptr<D3D12_SUBRESOURCE_DATA[]> subresourceData(new(std::nothrow)D3D12_SUBRESOURCE_DATA[numImages]);
 		for (uint32 i = 0; i < numImages; i++) {
-			D3D12_SUBRESOURCE_DATA& subresource = subresources[i];
+			D3D12_SUBRESOURCE_DATA& subresource = subresourceData[i];
 			subresource.RowPitch = images[i].rowPitch;
 			subresource.SlicePitch = images[i].slicePitch;
 			subresource.pData = images[i].pixels;
 		}
 
-		DxTexture result = DxTexture::Create(textureDesc, subresources, numImages);
+		DxTexture result = DxTexture::Create(textureDesc, subresourceData.get(), numImages);
 		return result;
 	}
 }
@@ -238,10 +242,7 @@ namespace {
 void DxTexture::UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, uint32 firstSubresource, uint32 numSubresource) {
 	DxContext& dxContext = DxContext::Instance();
 	DxCommandList* commandList = dxContext.GetFreeCopyCommandList();
-	// commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(Resource.Get(),
-	D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
-	commandList->CommandList->ResourceBarrier(1, &barrier);
+	commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
 
 	uint64 requiredSize = GetRequiredIntermediateSize(Resource.Get(), firstSubresource, numSubresource);
 
@@ -259,11 +260,12 @@ void DxTexture::UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, u
 
 	SetName(commandList->CommandList, "Copy command list");
 	SetName(Resource, "Copy destination");
-	UpdateSubresources(commandList->CommandList.Get(), Resource.Get(), intermediateResource.Get(), 0, 0, numSubresource, subresourceData);
+
+	UpdateSubresources(commandList->CommandList.Get(), Resource.Get(), intermediateResource.Get(), 0, firstSubresource, numSubresource, subresourceData);
 	dxContext.RetireObject(intermediateResource);
 
 	// We are omitting the transition to common here, since the resource automatically decays to common state after being accessed on a copy queue.
-	// commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
+	commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
 
 	dxContext.ExecuteCommandList(commandList);
 }
@@ -305,7 +307,7 @@ DxTexture DxTexture::Create(D3D12_RESOURCE_DESC textureDesc, D3D12_SUBRESOURCE_D
 		&textureDesc,
 		initialState,
 		nullptr,
-		IID_PPV_ARGS(result.Resource.GetAddressOf())
+		IID_PPV_ARGS(&result.Resource)
 	));
 
 	result.FormatSupport.Format = textureDesc.Format;

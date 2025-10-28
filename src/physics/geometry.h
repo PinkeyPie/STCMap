@@ -16,7 +16,7 @@ enum MeshCreationFlags {
 
 class CpuMesh {
 public:
-	CpuMesh() {}
+	CpuMesh() = default;
 	CpuMesh(uint32 flags);
 	CpuMesh(const CpuMesh&) = delete;
 	CpuMesh(CpuMesh&& mesh);
@@ -25,12 +25,6 @@ public:
 	uint32 Flags = 0;
 	uint32 VertexSize = 0;
 	uint32 SkinOffset = 0;
-
-	uint8* Vertices = nullptr;
-	IndexedTriangle16* Triangles = nullptr;
-
-	uint32 NumVertices = 0;
-	uint32 NumTriangles = 0;
 
 	SubmeshInfo PushQuad(vec2 radius);
 	SubmeshInfo PushQuad(float radius) {
@@ -49,6 +43,12 @@ public:
 	DxVertexBuffer CreateVertexBufferWithAlternativeLayout(uint32 otherFlags, bool allowUnorderedAccess = false) const;
 
 private:
+	uint8* _vertices = nullptr;
+	IndexedTriangle16* _triangles = nullptr;
+
+	uint32 _numVertices = 0;
+	uint32 _numTriangles = 0;
+
 	void AlignNextTriangle();
 	void Reserve(uint32 vertexCount, uint32 triangleCount);
 	void PushTriangle(uint16 a, uint16 b, uint16 c);

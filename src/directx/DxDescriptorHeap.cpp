@@ -269,7 +269,7 @@ void DxFrameDescriptorAllocator::NewFrame(uint32 bufferedFrameId) {
 	_currentFrame = bufferedFrameId;
 	while (not _usedPages[_currentFrame].empty()) {
 		DxDescriptorPage* page = _usedPages[_currentFrame].top();
-		_usedPages->pop();
+		_usedPages[_currentFrame].pop();
 		_freePages.push(page);
 	}
 
