@@ -345,7 +345,7 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 
 			vec2 uv = DirectionToPanoramaUv(nor);
 			uv.y *= texStretch;
-			PushVertex(pos, uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
+			PushVertex(pos, uv, normalize(nor), normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
 		}
 	}
 	for (uint32 y = 0; y < rows / 2u + 1u; y++) {
@@ -361,14 +361,12 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 
 			vec2 uv = DirectionToPanoramaUv(nor);
 			uv.y *= texStretch;
-			PushVertex(pos, uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
+			PushVertex(pos, uv, normalize(nor), normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
 		}
 	}
 	PushVertex(vec3(0.f, radius + halfHeight, 0.f), DirectionToPanoramaUv(vec3(0.f, 1.f, 0.f)), vec3(0.f, 1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
 
 	uint16 lastVertex = slices * (rows + 1) + 2;
-
-	uint32 triIndex = 0;
 
 	// Indices.
 	for (uint32 x = 0; x < slices - 1u; x++) {
@@ -391,6 +389,421 @@ SubmeshInfo CpuMesh::PushCapsule(uint16 slices, uint16 rows, float height, float
 	SubmeshInfo result;
 	result.FirstTriangle = firstTriangle;
 	result.NumTriangles = 2 * (rows + 1) * slices;
+	result.BaseVertex = baseVertex;
+	result.NumVertices = _numVertices - baseVertex;
+	return result;
+}
+
+SubmeshInfo CpuMesh::PushCylinder(uint16 slices, float radius, float height) {
+	AlignNextTriangle();
+
+	uint32 baseVertex = _numVertices;
+	uint32 firstTriangle = _numTriangles;
+
+	assert(slices > 2);
+
+	float horzDeltaAngle = 2.f * PI / slices;
+	float halfHeight = height * 0.5f;
+
+	Reserve(4 * slices + 2, 4 * slices);
+
+	vec2 uv(0.f, 0.f);
+	PushVertex(vec3(0.f, -halfHeight, 0.f), uv, vec3(0.f, -1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
+
+	// Bottom row, normal down.
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * radius, -halfHeight, vertexZ * radius);
+		vec3 nor(0.f, -1.f, 0.f);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Bottom row, normal around
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * radius, -halfHeight, vertexZ * radius);
+		vec3 nor(vertexX, 0.f, vertexZ);
+
+		PushVertex(pos, uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
+	}
+
+	// Top row, normal around
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = cosf(horzAngle);
+		vec3 pos(vertexX * radius, halfHeight, vertexZ * radius);
+		vec3 nor(vertexX, 0.f, vertexZ);
+
+		PushVertex(pos, uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
+	}
+
+	// Top row, normal up.
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * radius, halfHeight, vertexZ * radius);
+		vec3 nor(0.f, 1.f, 0.f);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	PushVertex(vec3(0.f, halfHeight, 0.f), uv, vec3(0.f, 1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
+
+	uint16 lastVertex = 4 * slices + 2;
+
+	// Indices.
+	for (uint32 x = 0; x < slices - 1u; x++) {
+		PushTriangle(0, x + 1, x + 2);
+	}
+	PushTriangle(0, slices, 1);
+
+	for (uint32 x = 0; x < slices - 1u; x++) {
+		PushTriangle(slices + 1 + x, 2 * slices + 2 + x, slices + 2 + x);
+		PushTriangle(slices + 1 + x, 2 * slices + 1 + x, 2 * slices + 2 + x);
+	}
+	PushTriangle(slices + slices, 2 * slices + 1, slices + 1);
+	PushTriangle(slices + slices, 2 * slices + slices, 2 * slices + 1);
+
+	for (uint32 x = 0; x < slices - 1u; x++) {
+		PushTriangle(lastVertex - 2 - x, lastVertex - 3 - x, lastVertex - 1);
+	}
+	PushTriangle(lastVertex - 1 - slices, lastVertex - 2, lastVertex - 1);
+
+	SubmeshInfo result;
+	result.FirstTriangle = firstTriangle;
+	result.NumTriangles = 4 * slices;
+	result.BaseVertex = baseVertex;
+	result.NumVertices = _numVertices - baseVertex;
+	return result;
+}
+
+SubmeshInfo CpuMesh::PushArrow(uint16 slices, float shaftRadius, float headRadius, float shaftLength, float headLength) {
+	AlignNextTriangle();
+
+	uint32 baseVertex = _numVertices;
+	uint32 firstTriangle = _numTriangles;
+
+	assert(slices > 2);
+
+	float horzDeltaAngle = 2.f * PI / slices;
+
+	Reserve(7 * slices + 1, 7 * slices);
+
+	vec2 uv(0.f, 0.f);
+	PushVertex(vec3(0.f, 0.f, 0.f), uv, vec3(0.f, -1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
+
+	// Bottom row, normal down
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * shaftRadius, 0.f, vertexZ * shaftRadius);
+		vec3 nor(0.f, -1.f, 0.f);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Bottom row, normal around
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * shaftRadius, 0.f, vertexZ * shaftRadius);
+		vec3 nor(vertexX, 0.f, vertexZ);
+
+		PushVertex(pos, uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
+	}
+
+	// Top row, normal around
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * shaftRadius, shaftLength, vertexZ * shaftRadius);
+		vec3 nor(vertexX, 0.f, vertexZ);
+
+		PushVertex(pos, uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
+	}
+
+	// Top row, normal down
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * shaftRadius, shaftLength, vertexZ * shaftRadius);
+		vec3 nor(0.f, -1.f, 0.f);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Top outer row, normal down
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * headRadius, shaftLength, vertexZ * headRadius);
+		vec3 nor(0.f, -1.f, 0.f);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	vec2 normal2D = normalize(vec2(headLength, headRadius));
+
+	// Top outer row, normal around
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX* headRadius, shaftLength, vertexZ * headRadius);
+		vec3 nor(vertexX * normal2D.x, normal2D.y, vertexZ * normal2D.x);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Top vertex.
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(0.f, shaftLength + headLength, 0.f);
+		vec3 nor(vertexX * normal2D.x, normal2D.y, vertexZ * normal2D.x);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Indices
+	for (uint32 x = 0; x < slices - 1u; x++) {
+		PushTriangle(0, x + 1, x + 2);
+	}
+	PushTriangle(0, slices, 1);
+
+	for (uint32 y = 1; y < 7; y += 2) {
+		for (uint32 x = 0; x < slices - 1u; x++) {
+			PushTriangle(y * slices + 1 + x, (y + 1) * slices + 2 + x, y * slices + 2 + x);
+			PushTriangle(y * slices + 1 + x, (y + 1) * slices + 1 + x, (y + 1) * slices + 2 + x);
+		}
+		PushTriangle(y * slices + slices, (y + 1) * slices + 1, y * slices + 1);
+		PushTriangle(y * slices + slices, (y + 1) * slices + slices, (y + 1) * slices + 1);
+	}
+
+	SubmeshInfo result;
+	result.FirstTriangle = firstTriangle;
+	result.NumTriangles = 7 * slices;
+	result.BaseVertex = baseVertex;
+	result.NumVertices = _numVertices - baseVertex;
+	return result;
+}
+
+SubmeshInfo CpuMesh::PushTorus(uint16 slices, uint16 segments, float torusRadius, float tubeRadius) {
+	AlignNextTriangle();
+
+	uint32 baseVertex = _numVertices;
+	uint32 firstTriangle = _numTriangles;
+
+	assert(slices > 2);
+	assert(slices > 2);
+
+	float tubeDeltaAngle = 2.f * PI / slices;
+	float torusDeltaAngle = 2.f * PI / segments;
+
+	Reserve(segments * slices, segments * slices * 2);
+
+	vec2 uv(0.f, 0.f);
+
+	quat torusRotation(vec3(1.f, 0.f, 0.f), deg2rad(90.f));
+
+	for (uint32 s = 0; s < segments; s++) {
+		float segmentAngle = s * torusDeltaAngle;
+		quat segmentRotation(vec3(0.f, 0.f, 1.f), segmentAngle);
+
+		vec3 segmentOffset = segmentRotation * vec3(torusRadius, 0.f, 0.f);
+
+		for (uint32 x = 0; x < slices; x++) {
+			float horzAngle = x * tubeDeltaAngle;
+			float vertexX = cosf(horzAngle);
+			float vertexZ = sinf(horzAngle);
+			vec3 pos = torusRotation * (segmentRotation * vec3(vertexX * tubeRadius, 0.f, vertexZ * tubeRadius) + segmentOffset);
+			vec3 nor = torusRotation * (segmentRotation * vec3(vertexX, 0.f, vertexZ));
+
+			PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+		}
+	}
+
+	uint16 numVertices = segments * slices;
+
+	for (uint32 y = 0; y < segments - 1u; y++) {
+		for (uint32 x = 0; x < slices - 1u; x++) {
+			PushTriangle(y * slices + x, (y + 1) * slices + 1 + x, y * slices + 1 + x);
+			PushTriangle(y * slices + x, (y + 1) * slices + x, (y + 1) * slices + 1 + x);
+		}
+		PushTriangle(y * slices + slices - 1, (y + 1) * slices, y * slices);
+		PushTriangle(y * slices + slices - 1, (y + 1) * slices + slices - 1, (y + 1) * slices);
+	}
+
+	uint32 y = segments - 1u;
+	for (uint32 x = 0; x < slices - 1u; x++) {
+		PushTriangle(y * slices + x, 1 + x, y * slices + 1 + x);
+		PushTriangle(y * slices + x, x, 1 + x);
+	}
+	PushTriangle(y * slices + slices - 1, 0, y * slices);
+	PushTriangle(y * slices + slices - 1, slices - 1, 0);
+
+	SubmeshInfo result;
+	result.FirstTriangle = firstTriangle;
+	result.NumTriangles = segments * slices * 2;
+	result.BaseVertex = baseVertex;
+	result.NumVertices = _numVertices - baseVertex;
+	return result;
+}
+
+SubmeshInfo CpuMesh::PushMace(uint16 slices, float shaftRadius, float headRadius, float shaftLength, float headLength) {
+	AlignNextTriangle();
+
+	uint32 baseVertex = _numVertices;
+	uint32 firstTriangle = _numTriangles;
+
+	assert(slices > 2);
+
+	float horzDeltaAngle = 2.f * PI / slices;
+
+	Reserve(8 * slices + 2, 8 * slices);
+
+	vec2 uv(0.f, 0.f);
+	PushVertex(vec3(0.f, 0.f, 0.f), uv, vec3(0.f, -1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
+
+	// Bottom row, normal down
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * shaftRadius, 0.f, vertexZ * shaftRadius);
+		vec3 nor(0.f, -1.f, 0.f);
+
+		PushVertex(pos, uv,	nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Bottom row, normal around
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * shaftRadius, 0.f, vertexZ * shaftRadius);
+		vec3 nor(vertexX, 0.f, vertexZ);
+
+		PushVertex(pos, uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
+	}
+
+	// Top row, normal around
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * shaftRadius, shaftLength, vertexZ * shaftRadius);
+		vec3 nor(vertexX, 0.f, vertexZ);
+
+		PushVertex(pos,	uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
+	}
+
+	// Top row, normal down
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * shaftRadius, shaftLength, vertexZ * shaftRadius);
+		vec3 nor(0.f, -1.f, 0.f);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Top outer row, normal down
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * headRadius, shaftLength, vertexZ * headRadius);
+		vec3 nor(0.f, -1.f, 0.f);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Top outer row, normal around
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * headRadius, shaftLength, vertexZ * headRadius);
+		vec3 nor(0.f, -1.f, 0.f);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Top outer row, normal around
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * headRadius, shaftLength, vertexZ * headRadius);
+		vec3 nor(vertexX, 0.f, vertexZ);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Top top outer row, normal around.
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * headRadius, shaftLength + headLength, vertexZ * headRadius);
+		vec3 nor(vertexX, 0.f, vertexZ);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	// Top top outer row, normal up.
+	for (uint32 x = 0; x < slices; x++) {
+		float horzAngle = x * horzDeltaAngle;
+		float vertexX = cosf(horzAngle);
+		float vertexZ = sinf(horzAngle);
+		vec3 pos(vertexX * headRadius, shaftLength + headLength, vertexZ * headRadius);
+		vec3 nor(0.f, 1.f, 0.f);
+
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
+	}
+
+	PushVertex(vec3(0.f, shaftLength + headLength, 0.f), uv, vec3(0.f, 1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
+
+	uint16 lastVertex = 8 * slices + 2;
+
+	// Indices.
+	for (uint32 x = 0; x < slices - 1u; x++) {
+		PushTriangle(0, x + 1, x + 2);
+	}
+	PushTriangle(0, slices, 1);
+
+	for (uint32 y = 1; y < 7; y += 2) {
+		for (uint32 x = 0; x < slices - 1u; x++) {
+			PushTriangle(y * slices + 1 + x, (y + 1) * slices + 2 + x, y * slices + 2 + x);
+			PushTriangle(y * slices + 1 + x, (y + 1) * slices + 1 + x, (y + 1) * slices + 2 + x);
+		}
+		PushTriangle(y * slices + slices, (y + 1) * slices + 1, y * slices + 1);
+		PushTriangle(y * slices + slices, (y + 1) * slices + slices, (y + 1) * slices + 1);
+	}
+
+	for (uint32 x = 0; x < slices - 1u; x++) {
+		PushTriangle(lastVertex - 2 - x, lastVertex - 3 - x, lastVertex - 1);
+	}
+	PushTriangle(lastVertex - 1 - slices, lastVertex - 2, lastVertex - 1);
+
+	SubmeshInfo result;
+	result.FirstTriangle = firstTriangle;
+	result.NumTriangles = 8 * slices;
 	result.BaseVertex = baseVertex;
 	result.NumVertices = _numVertices - baseVertex;
 	return result;

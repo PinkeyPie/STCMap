@@ -25,7 +25,7 @@ struct SkyCb
 "StaticSampler(s0, visibility=SHADER_VISIBILITY_PIXEL)," \
 "DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_PIXEL)"
 
-#define SKY_RS_VP 0
-#define SKY_RS_TEX 1
+#define SkyRsVp  0
+#define SkyRsTex 1
 
 #endif

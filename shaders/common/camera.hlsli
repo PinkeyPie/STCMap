@@ -5,19 +5,23 @@
 
 struct CameraCb
 {
-    mat4 View;
-    mat4 Proj;
-    mat4 ViewProj;
-    mat4 InvView;
-    mat4 InvProj;
-    mat4 InvViewProj;
+    mat4  View;
+    mat4  Proj;
+    mat4  ViewProj;
+    mat4  InvView;
+    mat4  InvProj;
+    mat4  InvViewProj;
     
-    float3 Position;
-    float Padding0;
-    
-    float2 NearFar; // x = near, y = far
-    float  FarOverNear;
-    float  InvFarMinusNear;
+    vec4  Position;
+    vec4  Forward;
+
+    float Near;
+    float Far;
+    float FarOverNear;
+    float OneMinusFarOverNear;
+
+    vec2  ScreenDims;
+    vec2  InvScreenDims;
 };
 
 static float3 RestoreViewSpacePosition(float2 uv, float depth, float4x4 invProj)
@@ -60,16 +64,14 @@ static float3 RestoreWorldDirection(float2 uv, float4x4 invViewProj, float3 came
     return normalize(direction);
 }
 
-static float DepthBufferDepthToLinearNormalizedDepthEyeToFarPlane(float depthBufferDepth, float4 projectionParams)
+static float DepthBufferDepthToLinearNormalizedDepthEyeToFarPlane(float depthBufferDepth, float farOverNear, float oneMinusFarOverNear)
 {
-    const float c1 = projectionParams.z; // far / (far - near)
-    const float c2 = projectionParams.w; // -far * near / (far - near)
-    return 1.f / (depthBufferDepth * c2 + c1);
+    return 1.f / (depthBufferDepth * oneMinusFarOverNear + farOverNear);
 }
 
-static float DepthBufferDepthToLinearWorldDepthEyeToFarPlane(float depthBufferDepth, float4 projectionParams)
+static float DepthBufferDepthToLinearWorldDepthEyeToFarPlane(float depthBufferDepth, float farOverNear, float oneMinusFarOverNear, float far)
 {
-    return DepthBufferDepthToLinearNormalizedDepthEyeToFarPlane(depthBufferDepth, projectionParams) * projectionParams.y; // near
+    return DepthBufferDepthToLinearNormalizedDepthEyeToFarPlane(depthBufferDepth, farOverNear, oneMinusFarOverNear) * far; // near
 }
 
 struct CameraFrustumPlanes 

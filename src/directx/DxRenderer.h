@@ -23,14 +23,28 @@ static const char* aspectRatioNames[] = {
 	"16:10"
 };
 
+enum GizmoType {
+	EGizmoTypeTranslation,
+	EGizmoTypeRotation,
+	EGizmoTypeScale,
+
+	EgizmoTypeCount
+};
+
+static const char* gizmoTypeNames[] = {
+	"Translation",
+	"Rotation",
+	"Scale"
+};
+
 struct PbrEnvironment {
 	DxTexture Sky;
 	DxTexture Prefiltered;
 	DxTexture Irradiance;
 
-	DxDescriptorHandle SkyHandle;
-	DxDescriptorHandle PrefilteredHandle;
-	DxDescriptorHandle IrradianceHandle;
+	DxDescriptorHandle SkySRV;
+	DxDescriptorHandle PrefilteredSRV;
+	DxDescriptorHandle IrradianceSRV;
 };
 
 class DxRenderer {
@@ -54,8 +68,6 @@ private:
 	static DxRenderer* _instance;
 
 	RenderCamera _camera = {};
-	DxMesh _mesh = {};
-	SubmeshInfo _submesh = {};
 
 	TonemapCb _tonemap = DefaultTonemapParameters();
 
@@ -80,16 +92,49 @@ private:
 	DxPipeline _proceduralSkyPipeline;
 	DxPipeline _presentPipeline;
 	DxPipeline _modelPipeline;
+	DxPipeline _modelDepthOnlyPipeline;
+	DxPipeline _outlinePipeline;
 
 	CompositeMesh _sceneMesh;
-	DxTexture _texture;
-	DxDescriptorHandle _textureHandle;
-	trs* _meshTransforms;
-	mat4* _meshModelMatrices;
-	static constexpr uint32 _numMeshes = 1;
+	DxTexture _meshAlbedoTex;
+	DxTexture _meshNormalTex;
+	DxTexture _meshRoughTex;
+	DxTexture _meshMetalTex;
+	DxDescriptorHandle _textureSRV;
+
+	trs _meshTransform;
+
+	DxTexture _whiteTexture;
+	DxDescriptorHandle _whiteTextureSRV;
 
 	DxMesh _skyMesh;
+	DxMesh _gizmoMesh;
 	PbrEnvironment _environment;
+
+	static union {
+		struct {
+			SubmeshInfo TranslationGizmoSubmesh;
+			SubmeshInfo RotationGizmoSubmesh;
+			SubmeshInfo ScaleGizmoSubmesh;
+		};
+
+		SubmeshInfo gizmoSubmeshes[3];
+	};
+
+	quat _gizmoRotations[] = {
+		quat(vec3(0.f, 0.f, -1.f), deg2rad(90.f)),
+		quat::identity,
+		quat(vec3(1.f, 0.f, 0.f), deg2rad(90.f))
+	};
+
+	vec4 _gizmoColors[] = {
+		vec4(1.f, 0.f, 0.f, 1.f),
+		vec4(0.f, 1.f, 0.f, 1.f),
+		vec4(0.f, 0.f, 1.f, 1.f)
+	};
+
+	DxTexture _brdfTex;
+	DxDescriptorHandle _brdfTexSRV;
 
 	float _clearColor[4];
 };

@@ -24,4 +24,5 @@ struct CompositeMesh {
 
 const aiScene* LoadAssimpScene(const char* filepathRaw);
 void FreeScene(const aiScene* scene);
-CompositeMesh CreateCompositeMeshFromScene(const aiScene* scene);
+CompositeMesh CreateCompositeMeshFromScene(const aiScene* scene, uint32 flags);
+CompositeMesh CreateCompositeMeshFromFile(const char* sceneFilename, uint32 flags);

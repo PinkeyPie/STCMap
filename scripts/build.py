@@ -8,6 +8,8 @@ shaders_dir = os.path.join(parent_dir, 'shaders')
 shader_model = "5_1"
 
 def compile_shader(relative_path: str) -> None:
+	if relative_path.endswith('hlsli'):
+		return
 	name =  relative_path.replace(f"{os.path.dirname(relative_path)}{os.path.sep}", '')
 
 	src_path = os.path.join(shaders_dir, relative_path)

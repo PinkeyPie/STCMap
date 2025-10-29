@@ -37,6 +37,22 @@ static TonemapCb DefaultTonemapParameters()
     return result;
 }
 
+static float AcesFilmic(float x, float A, float B, float C, float D, float E, float F)
+{
+    return ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - (E / F);
+}
+
+static float FilmicTonemapping(float color, TonemapCb tonemap)
+{
+    float expExposure = exp2(tonemap.Exposure);
+    color *= expExposure;
+
+    float r = AcesFilmic(color, tonemap.A, tonemap.B, tonemap.C, tonemap.D, tonemap.E, tonemap.F) /
+		AcesFilmic(tonemap.LinearWhite, tonemap.A, tonemap.B, tonemap.C, tonemap.D, tonemap.E, tonemap.F);
+
+    return r;
+}
+
 #define PRESENT_RS \
 "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | " \
 "ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | " \
@@ -54,8 +70,8 @@ static TonemapCb DefaultTonemapParameters()
     "visibility=SHADER_VISIBILITY_PIXEL)," \
 "DescriptorTable(SRV(t0, numDescriptors=1), visibility=SHADER_VISIBILITY_PIXEL)"
 
-#define PRESENT_RS_TONEMAP 0
-#define PRESENT_RS_PRESENT 1
-#define PRESENT_RS_TEX     2
+#define PresentRsTonemap 0
+#define PresentRsPresent 1
+#define PresentRsTex     2
 
 #endif

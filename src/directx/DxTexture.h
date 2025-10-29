@@ -16,10 +16,11 @@ enum TextureLoadFlags {
 	ETextureLoadFlagsNoncolor				= (1 << 0),
 	ETextureLoadFlagsCompress				= (1 << 1),
 	ETextureLoadFlagsGenMipsOnCpu			= (1 << 2),
-	ETextureLoadFlagsAllocateFullMipChain	= (1 << 3), // Use if you want to create the mip chain on the GPU
-	ETextureLoadFlagsPremultiplyAlpha		= (1 << 4),
-	ETextureLoadFlagsCacheToDds				= (1 << 5),
-	ETextureLoadFlagsAlwaysLoadFromSource	= (1 << 6), // By default the system will always try to load a cached version of the texture. You can prevent this with this flag.
+	ETextureLoadFlagsGenMipsOnGpu			= (1 << 3),
+	ETextureLoadFlagsAllocateFullMipChain	= (1 << 4), // Use if you want to create the mip chain on the GPU
+	ETextureLoadFlagsPremultiplyAlpha		= (1 << 5),
+	ETextureLoadFlagsCacheToDds				= (1 << 6),
+	ETextureLoadFlagsAlwaysLoadFromSource	= (1 << 7), // By default the system will always try to load a cached version of the texture. You can prevent this with this flag.
 
 	ETextureLoadFlagsDefault = ETextureLoadFlagsCompress | ETextureLoadFlagsGenMipsOnCpu | ETextureLoadFlagsCacheToDds,
 };

@@ -5,6 +5,7 @@
 #include "DxContext.h"
 #include "DxRenderPrimitives.h"
 #include "DirectXTex.h"
+#include "../render/TexturePreprocessing.h"
 #include "dx/DDSTextureLoader.h"
 
 namespace fs = std::filesystem;
@@ -139,6 +140,11 @@ namespace {
 	}
 
 	bool LoadImageFromFile(const fs::path& filepath, uint32 flags, DirectX::ScratchImage& scratchImage, D3D12_RESOURCE_DESC& textureDesc) {
+		if (flags & ETextureLoadFlagsGenMipsOnGpu) {
+			flags &= ~ETextureLoadFlagsGenMipsOnCpu;
+			flags |= ETextureLoadFlagsAllocateFullMipChain;
+		}
+
 		fs::path extension = filepath.extension();
 		DirectX::TexMetadata metadata;
 
@@ -235,6 +241,16 @@ namespace {
 		}
 
 		DxTexture result = DxTexture::Create(textureDesc, subresourceData.get(), numImages);
+
+		if (flags & ETextureLoadFlagsGenMipsOnGpu) {
+			DxContext& context = DxContext::Instance();
+			context.RenderQueue.WaitForOtherQueue(context.CopyQueue);
+			DxCommandList* list = context.GetFreeRenderCommandList();
+			TexturePreprocessor* preprocessor = TexturePreprocessor::Instance();
+			preprocessor->GenerateMipMapsOnGPU(list, result);
+			context.ExecuteCommandList(list);
+		}
+
 		return result;
 	}
 }

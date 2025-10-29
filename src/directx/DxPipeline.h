@@ -24,6 +24,7 @@ public:
 		Desc = {};
 		Desc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 		Desc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+		Desc.RasterizerState.FrontCounterClockwise = true;
 		Desc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 		Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 		Desc.SampleDesc = {.Count = 1, .Quality = 0 };
@@ -140,8 +141,25 @@ public:
 		return *this;
 	}
 
-	DxGraphicsPipelineGenerator& StencilSettings(bool stencilTest = true) {
-		Desc.DepthStencilState.StencilEnable = stencilTest;
+	DxGraphicsPipelineGenerator& StencilSettings(
+		D3D12_COMPARISON_FUNC func = D3D12_COMPARISON_FUNC_ALWAYS,
+		D3D12_STENCIL_OP onPass = D3D12_STENCIL_OP_KEEP,
+		D3D12_STENCIL_OP onDepthFail = D3D12_STENCIL_OP_KEEP,
+		D3D12_STENCIL_OP onFail = D3D12_STENCIL_OP_KEEP,
+		uint8 readMask = D3D12_DEFAULT_STENCIL_READ_MASK, uint8 writeMask = D3D12_DEFAULT_STENCIL_READ_MASK) {
+		Desc.DepthStencilState.StencilEnable = true;
+		Desc.DepthStencilState.StencilReadMask = readMask;
+		Desc.DepthStencilState.StencilWriteMask = writeMask;
+
+		Desc.DepthStencilState.FrontFace.StencilFailOp = onFail;
+		Desc.DepthStencilState.FrontFace.StencilDepthFailOp = onDepthFail;
+		Desc.DepthStencilState.FrontFace.StencilPassOp = onPass;
+		Desc.DepthStencilState.FrontFace.StencilFunc = func;
+
+		Desc.DepthStencilState.BackFace.StencilFailOp = onFail;
+		Desc.DepthStencilState.BackFace.StencilDepthFailOp = onDepthFail;
+		Desc.DepthStencilState.BackFace.StencilPassOp = onPass;
+		Desc.DepthStencilState.BackFace.StencilFunc = func;
 		return *this;
 	}
 

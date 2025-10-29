@@ -89,6 +89,16 @@ public:
 
 	DxDynamicVertexBuffer CreateDynamicVertexBuffer(uint32 elementSize, uint32 elementCount, void* data);
 
+	void SetGraphicsUAV(uint32 rootParameterIndex, DxBuffer& buffer);
+	void SetGraphicsUAV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetComputeUAV(uint32 rootParameterIndex, DxBuffer& buffer);
+	void SetComputeUAV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+
+	void SetGraphicsSRV(uint32 rootParameterIndex, DxBuffer& buffer);
+	void SetGraphicsSRV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetComputeSRV(uint32 rootParameterIndex, DxBuffer& buffer);
+	void SetComputeSRV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+
 	// Shader resources.
 	void SetDescriptorHeap(DxDescriptorHeap& descriptorHeap);
 	void SetDescriptorHeap(DxDescriptorRange& descriptorRange);

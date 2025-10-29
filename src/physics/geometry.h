@@ -27,15 +27,15 @@ public:
 	uint32 SkinOffset = 0;
 
 	SubmeshInfo PushQuad(vec2 radius);
-	SubmeshInfo PushQuad(float radius) {
-		return PushQuad(vec2(radius, radius));
-	}
+	SubmeshInfo PushQuad(float radius) { return PushQuad(vec2(radius, radius)); }
 	SubmeshInfo PushCube(vec3 radius, bool flipWindingOrder = false);
-	SubmeshInfo PushCube(float radius, bool flipWindingOrder = false) {
-		return PushCube(vec3(radius, radius, radius), flipWindingOrder);
-	}
+	SubmeshInfo PushCube(float radius, bool flipWindingOrder = false) { return PushCube(vec3(radius, radius, radius), flipWindingOrder); }
 	SubmeshInfo PushSphere(uint16 slices, uint16 rows, float radius);
 	SubmeshInfo PushCapsule(uint16 slices, uint16 rows, float height, float radius);
+	SubmeshInfo PushCylinder(uint16 slices, float radius, float height);
+	SubmeshInfo PushArrow(uint16 slices, float shaftRadius, float headRadius, float shaftLength, float headLength);
+	SubmeshInfo PushTorus(uint16 slices, uint16 segments, float torusRadius, float tubeRadius);
+	SubmeshInfo PushMace(uint16 slices, float shaftRadius, float headRadius, float shiftLength, float headLength);
 
 	SubmeshInfo PushAssimpMesh(const struct aiMesh* mesh, float scale, AABBCollider* aabb = nullptr);
 

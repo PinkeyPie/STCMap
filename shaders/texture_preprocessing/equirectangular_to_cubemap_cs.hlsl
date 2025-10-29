@@ -12,13 +12,7 @@
 #include "../common/math.hlsli"
 #define BLOCK_SIZE 16
 
-struct CsInput 
-{
-    uint GroupId            : SV_GroupID;           // 3D index of the thread group in the dispatch
-    uint GroupThreadId      : SV_GroupThreadID;     // 3D index of the thread within the thread group
-    uint DispatchThreadId   : SV_DispatchThreadID;  // 3D index of the thread within the dispatch
-    uint GroupIndex         : SV_GroupIndex;        // 1D index of the thread within the thread group
-};
+#include "../common/cs.hlsli"
 
 cbuffer EquirectangularToCubemapCb : register(b0) 
 {
