@@ -27,6 +27,7 @@ struct PbrMaterialCb
 "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | DENY_HULL_SHADER_ROOT_ACCESS | DENY_DOMAIN_SHADER_ROOT_ACCESS | DENY_GEOMETRY_SHADER_ROOT_ACCESS)," \
 "RootConstants(num32BitConstants=32, b0, visibility=SHADER_VISIBILITY_VERTEX)," \
 "RootConstants(num32BitConstants=8, b1, visibility=SHADER_VISIBILITY_PIXEL),"\
+"CBV(b2),"\
 "StaticSampler(s0, addressU=TEXTURE_ADDRESS_WRAP, addressV=TEXTURE_ADDRESS_WRAP, addressW=TEXTURE_ADDRESS_WRAP, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility=SHADER_VISIBILITY_PIXEL)," \
 "DescriptorTable(SRV(t0, numDescriptors=4), visibility=SHADER_VISIBILITY_PIXEL),"\
 "DescriptorTable(SRV(t0, space=1, numDescriptors=2), visibility=SHADER_VISIBILITY_PIXEL),"\
@@ -40,9 +41,10 @@ struct PbrMaterialCb
 
 #define ModelRsMeshViewProj         0
 #define ModelRsMaterial             1
-#define ModelRsPbrTextures          2
-#define ModelRsEnvironmentTextures  3
-#define ModelRsBrdf                 4
-#define ModelRsLights               5
+#define ModelRsCamera               2
+#define ModelRsPbrTextures          3
+#define ModelRsEnvironmentTextures  4
+#define ModelRsBrdf                 5
+#define ModelRsLights               6
 
 #endif

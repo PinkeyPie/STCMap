@@ -1,5 +1,6 @@
 #include "rs/model_rs.hlsli"
 #include "common/brdf.hlsli"
+#include "common/camera.hlsli"
 #include "rs/light_culling.hlsli"
 
 struct PsInput
@@ -11,6 +12,7 @@ struct PsInput
 };
 
 ConstantBuffer<PbrMaterialCb> material : register(b1);
+ConstantBuffer<CameraCb> camera        : register(b2);
 
 SamplerState WrapSampler                : register(s0);
 SamplerState ClampSampler               : register(s1);
@@ -33,7 +35,6 @@ StructuredBuffer<SpotLightBoundingVolume> SpotLights    : register(t3, space3);
 // Todo
 static const float3 L = normalize(float3(1.f, 0.f, 0.3f));
 static const float3 SunColor = float3(1.f, 1.f, 1.f) * 50.f;
-static const float3 CameraPosition = float3(0.f, 0.f, 4.f);
 
 [RootSignature(MODEL_RS)]
 float4 main(PsInput pin) : SV_Target
@@ -64,7 +65,8 @@ float4 main(PsInput pin) : SV_Target
     const uint lightOffset = lightIndexData.x;
     const uint lightCount = lightIndexData.y;
 
-    float3 camToPos = pin.worldPosition - CameraPosition.xyz;
+    float3 cameraPosition = camera.Position.xyz;
+    float3 camToPos = pin.worldPosition - cameraPosition;
     float3 V = -normalize(camToPos);
     float R0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo.xyz, metallic);
 
@@ -76,16 +78,17 @@ float4 main(PsInput pin) : SV_Target
         PointLightBoundingVolume pl = PointLights[index];
         if(length(pl.Position - pin.worldPosition) < pl.Radius)
         {
-            totalLighting.xyz += float3(0.4f, 0.f, 0.f);
+            float3 radiance = float3(50.f, 0.f, 0.f);
+            totalLighting.xyz += CalculateDirectLighting(albedo.xyz, radiance, N, L, V, R0, roughness, metallic);
         }
     }
 
-    // totalLighting.xyz += CalculateAmbientLighting(albedo.xyz, IrradianceTexture, EnvironmentTexture, Brdf, ClampSampler, N, V, R0, roughness, metallic, ao);
+    totalLighting.xyz += CalculateAmbientLighting(albedo.xyz, IrradianceTexture, EnvironmentTexture, Brdf, ClampSampler, N, V, R0, roughness, metallic, ao);
 
     float visibility = 1.f;
     float3 radiance = SunColor.xyz * visibility; // No attenuation for sun.
 
-    // totalLighting.xyz += CalculateDirectLighting(albedo.xyz, radiance, N, L, V, R0, roughness, metallic);
+    totalLighting.xyz += CalculateDirectLighting(albedo.xyz, radiance, N, L, V, R0, roughness, metallic);
 
     return totalLighting;
 }

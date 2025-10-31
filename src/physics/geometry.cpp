@@ -561,7 +561,7 @@ SubmeshInfo CpuMesh::PushArrow(uint16 slices, float shaftRadius, float headRadiu
 		float horzAngle = x * horzDeltaAngle;
 		float vertexX = cosf(horzAngle);
 		float vertexZ = sinf(horzAngle);
-		vec3 pos(vertexX* headRadius, shaftLength, vertexZ * headRadius);
+		vec3 pos(vertexX * headRadius, shaftLength, vertexZ * headRadius);
 		vec3 nor(vertexX * normal2D.x, normal2D.y, vertexZ * normal2D.x);
 
 		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
@@ -636,7 +636,7 @@ SubmeshInfo CpuMesh::PushTorus(uint16 slices, uint16 segments, float torusRadius
 		}
 	}
 
-	uint16 numVertices = segments * slices;
+	uint16 _numVertices = segments * slices;
 
 	for (uint32 y = 0; y < segments - 1u; y++) {
 		for (uint32 x = 0; x < slices - 1u; x++) {
@@ -678,7 +678,7 @@ SubmeshInfo CpuMesh::PushMace(uint16 slices, float shaftRadius, float headRadius
 	vec2 uv(0.f, 0.f);
 	PushVertex(vec3(0.f, 0.f, 0.f), uv, vec3(0.f, -1.f, 0.f), vec3(1.f, 0.f, 0.f), {});
 
-	// Bottom row, normal down
+	// Bottom row, normal down.
 	for (uint32 x = 0; x < slices; x++) {
 		float horzAngle = x * horzDeltaAngle;
 		float vertexX = cosf(horzAngle);
@@ -686,10 +686,10 @@ SubmeshInfo CpuMesh::PushMace(uint16 slices, float shaftRadius, float headRadius
 		vec3 pos(vertexX * shaftRadius, 0.f, vertexZ * shaftRadius);
 		vec3 nor(0.f, -1.f, 0.f);
 
-		PushVertex(pos, uv,	nor, vec3(1.f, 0.f, 0.f), {});
+		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
 	}
 
-	// Bottom row, normal around
+	// Bottom row, normal around.
 	for (uint32 x = 0; x < slices; x++) {
 		float horzAngle = x * horzDeltaAngle;
 		float vertexX = cosf(horzAngle);
@@ -700,7 +700,7 @@ SubmeshInfo CpuMesh::PushMace(uint16 slices, float shaftRadius, float headRadius
 		PushVertex(pos, uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
 	}
 
-	// Top row, normal around
+	// Top row, normal around.
 	for (uint32 x = 0; x < slices; x++) {
 		float horzAngle = x * horzDeltaAngle;
 		float vertexX = cosf(horzAngle);
@@ -708,10 +708,10 @@ SubmeshInfo CpuMesh::PushMace(uint16 slices, float shaftRadius, float headRadius
 		vec3 pos(vertexX * shaftRadius, shaftLength, vertexZ * shaftRadius);
 		vec3 nor(vertexX, 0.f, vertexZ);
 
-		PushVertex(pos,	uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
+		PushVertex(pos, uv, nor, normalize(cross(vec3(0.f, 1.f, 0.f), nor)), {});
 	}
 
-	// Top row, normal down
+	// Top row, normal down.
 	for (uint32 x = 0; x < slices; x++) {
 		float horzAngle = x * horzDeltaAngle;
 		float vertexX = cosf(horzAngle);
@@ -722,7 +722,7 @@ SubmeshInfo CpuMesh::PushMace(uint16 slices, float shaftRadius, float headRadius
 		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
 	}
 
-	// Top outer row, normal down
+	// Top outer row, normal down.
 	for (uint32 x = 0; x < slices; x++) {
 		float horzAngle = x * horzDeltaAngle;
 		float vertexX = cosf(horzAngle);
@@ -733,18 +733,7 @@ SubmeshInfo CpuMesh::PushMace(uint16 slices, float shaftRadius, float headRadius
 		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
 	}
 
-	// Top outer row, normal around
-	for (uint32 x = 0; x < slices; x++) {
-		float horzAngle = x * horzDeltaAngle;
-		float vertexX = cosf(horzAngle);
-		float vertexZ = sinf(horzAngle);
-		vec3 pos(vertexX * headRadius, shaftLength, vertexZ * headRadius);
-		vec3 nor(0.f, -1.f, 0.f);
-
-		PushVertex(pos, uv, nor, vec3(1.f, 0.f, 0.f), {});
-	}
-
-	// Top outer row, normal around
+	// Top outer row, normal around.
 	for (uint32 x = 0; x < slices; x++) {
 		float horzAngle = x * horzDeltaAngle;
 		float vertexX = cosf(horzAngle);

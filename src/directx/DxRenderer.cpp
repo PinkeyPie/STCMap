@@ -133,19 +133,21 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 
 	pipelineFactory->CreateAllReloadablePipelines();
 
+	_camera.Position = vec3(0.f, 3.f, 4.f);
+	_camera.Rotation = quat(vec3(1.f, 0.f, 0.f), deg2rad(-20.f));
 	_camera.VerticalFOV = deg2rad(70.f);
 	_camera.NearPlane = 0.1f;
 
 	{
-		// CpuMesh mesh(EMeshCreationFlagsWithPositions | EMeshCreationFlagsWithUvs | EMeshCreationFlagsWithNormals | EMeshCreationFlagsWithTangents);
-		// float shaftLength = 2.f;
-		// float headLength = 0.4f;
-		// float radius = 0.06f;
-		// float headRadius = 0.13f;
-		// TranslationGizmoSubmesh = mesh.PushArrow(6, radius, headRadius, shaftLength, headLength);
-		// RotationGizmoSubmesh = mesh.PushTorus(6, 64, shaftLength, radius);
-		// ScaleGizmoSubmesh = mesh.PushMace(6, radius, headRadius, shaftLength, headLength);
-		// _gizmoMesh = mesh.CreateDxMesh();
+		CpuMesh mesh(EMeshCreationFlagsWithPositions | EMeshCreationFlagsWithUvs | EMeshCreationFlagsWithNormals | EMeshCreationFlagsWithTangents);
+		float shaftLength = 2.f;
+		float headLength = 0.4f;
+		float radius = 0.06f;
+		float headRadius = 0.13f;
+		TranslationGizmoSubmesh = mesh.PushArrow(6, radius, headRadius, shaftLength, headLength);
+		RotationGizmoSubmesh = mesh.PushTorus(6, 64, shaftLength, radius);
+		ScaleGizmoSubmesh = mesh.PushMace(6, radius, headRadius, shaftLength, headLength);
+		_gizmoMesh = mesh.CreateDxMesh();
 	}
 
 	{
@@ -163,7 +165,7 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 		dxContext.ExecuteCommandList(list);
 	}
 
-	// _sceneMesh = CreateCompositeMeshFromFile("assets/meshes/Kettle.fbx", EMeshCreationFlagsWithPositions | EMeshCreationFlagsWithUvs | EMeshCreationFlagsWithNormals | EMeshCreationFlagsWithTangents);
+	_sceneMesh = CreateCompositeMeshFromFile("assets/meshes/Kettle.fbx", EMeshCreationFlagsWithPositions | EMeshCreationFlagsWithUvs | EMeshCreationFlagsWithNormals | EMeshCreationFlagsWithTangents);
 	// CpuMesh mesh(EMeshCreationFlagsWithPositions | EMeshCreationFlagsWithUvs | EMeshCreationFlagsWithNormals | EMeshCreationFlagsWithTangents);
 	// _sceneMesh.SingleMeshes.push_back({mesh.PushQuad(10000.f)});
 	// _sceneMesh.Mesh = mesh.CreateDxMesh();
@@ -193,9 +195,9 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 		_environment.Irradiance = preprocessor->CubemapToIrradiance(cl, _environment.Sky);
 		dxContext.ExecuteCommandList(cl);
 
-		_environment.SkySRV = GlobalDescriptorHeap.PushCubemapSRV(_environment.Sky);
-		_environment.PrefilteredSRV = GlobalDescriptorHeap.PushCubemapSRV(_environment.Prefiltered);
 		_environment.IrradianceSRV = GlobalDescriptorHeap.PushCubemapSRV(_environment.Irradiance);
+		_environment.PrefilteredSRV = GlobalDescriptorHeap.PushCubemapSRV(_environment.Prefiltered);
+		_environment.SkySRV = GlobalDescriptorHeap.PushCubemapSRV(_environment.Sky);
 
 		dxContext.RetireObject(sky.Resource);
 	}
@@ -446,7 +448,8 @@ int DxRenderer::DummyRender(float dt) {
 	cl->SetPipelineState(*_worldSpaceFrustumPipeline.Pipeline);
 	cl->SetComputeRootSignature(*_worldSpaceFrustumPipeline.RootSignature);
 	cl->SetComputeDynamicConstantBuffer(WorldSpaceTiledFrustumRsCamera, _cameraCBV);
-	cl->SetCompute32BitConstants(WorldSpaceTiledFrustumRsCb, _lightCullingBuffers.TiledFrustum);
+	cl->SetCompute32BitConstants(WorldSpaceTiledFrustumRsCb, FrustumCb{_lightCullingBuffers.NumTilesX, _lightCullingBuffers.NumTilesY});
+	cl->SetComputeUAV(WorldSpaceTiledFrustumRsFrustumUav, _lightCullingBuffers.TiledFrustum);
 	cl->Dispatch(bucketize(_lightCullingBuffers.NumTilesX, 16), bucketize(_lightCullingBuffers.NumTilesY, 16));
 
 	// Light culling
@@ -467,10 +470,11 @@ int DxRenderer::DummyRender(float dt) {
 	cl->SetPipelineState(*_modelPipeline.Pipeline);
 	cl->SetGraphicsRootSignature((*_modelPipeline.RootSignature));
 	cl->SetGraphicsDescriptorTable(ModelRsPbrTextures, _textureSRV);
-	cl->SetGraphicsDescriptorTable(ModelRsEnvironmentTextures, _environment.IrradianceSRV);
 	cl->SetGraphicsDescriptorTable(ModelRsBrdf, _brdfTexSRV);
 	cl->SetGraphicsDescriptorTable(ModelRsLights, _lightCullingBuffers.OpaqueLightGridSRV);
+	cl->SetGraphicsDynamicConstantBuffer(ModelRsCamera, _cameraCBV);
 	cl->SetGraphics32BitConstants(ModelRsMaterial, PbrMaterialCb{vec4(1.f, 1.f, 1.f, 1.f), 0.f, 0.f, USE_ALBEDO_TEXTURE | USE_NORMAL_TEXTURE | USE_ROUGHNESS_TEXTURE | USE_METALLIC_TEXTURE});
+	cl->SetGraphicsDescriptorTable(ModelRsEnvironmentTextures, _environment.IrradianceSRV);
 
 	cl->SetGraphics32BitConstants(ModelRsMeshViewProj, TransformCb{_camera.ViewProj * m, m});
 
@@ -521,6 +525,7 @@ int DxRenderer::DummyRender(float dt) {
 	cl->SetGraphics32BitConstants(PresentRsTonemap, _tonemap);
 	cl->SetGraphics32BitConstants(PresentRsPresent, PresentCb{0, 0.f});
 	cl->SetGraphicsDescriptorTable(PresentRsTex, _hdrColorTextureSrv);
+	cl->DrawFullscreenTriangle();
 
 	BarrierBatcher(cl)
 	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON)

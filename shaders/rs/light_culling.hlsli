@@ -20,7 +20,6 @@ struct FrustumCb
 {
     uint32 NumThreadsX;
     uint32 NumThreadsY;
-    uint32 TileSize;
 };
 
 struct LightCullingCb

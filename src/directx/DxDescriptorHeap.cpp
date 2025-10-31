@@ -135,11 +135,11 @@ DxDescriptorHandle DxDescriptorRange::PushRawBufferSRV(DxBuffer& buffer, BufferR
 }
 
 DxDescriptorHandle DxDescriptorRange::Create2DTextureUAV(DxTexture& texture, DxDescriptorHandle handle, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
-	return texture.Create2DTextureUAV(GetDevice(DescriptorHeap), handle, overrideFormat);
+	return texture.Create2DTextureUAV(GetDevice(DescriptorHeap), handle, mipSlice, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::Create2DTextureUAV(DxTexture& texture, uint32 index, uint32 mipSlice, DXGI_FORMAT overrideFormat) {
-	return texture.Create2DTextureUAV(GetDevice(DescriptorHeap), GetHandle(index), overrideFormat);
+	return texture.Create2DTextureUAV(GetDevice(DescriptorHeap), GetHandle(index), mipSlice, overrideFormat);
 }
 
 DxDescriptorHandle DxDescriptorRange::Push2DTextureUAV(DxTexture& texture, uint32 mipSlice, DXGI_FORMAT overrideFormat) {

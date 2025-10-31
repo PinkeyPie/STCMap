@@ -41,9 +41,10 @@ struct SpotLight
     float Bias;
 };
 
-struct 
+struct PointLight
 {
-    float4 WorldSpacePositionAndRadius;
+    float3 Position;
+    float Radius;
     float4 Color;
 };
 

@@ -4,8 +4,7 @@ DxContext& DxContext::_instance = *new DxContext{};
 
 namespace {
 	void EnableDebugLayer() {
-// #ifdef _DEBUG
-#if 0
+#ifdef _DEBUG
 		Com<ID3D12Debug> debugInterface;
 		ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(debugInterface.GetAddressOf())));
 		debugInterface->EnableDebugLayer();
@@ -27,8 +26,7 @@ namespace {
 
 void DxContext::CreateFactory() {
 	uint32 createFactoryFlags = 0;
-// #ifdef _DEBUG
-#if 0
+#ifdef _DEBUG
 	createFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
@@ -62,13 +60,13 @@ void DxContext::CreateAdapter() {
 void DxContext::CreateDevice() {
 	ThrowIfFailed(D3D12CreateDevice(_adapter.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(_device.GetAddressOf())));
 
-// #ifdef _DEBUG
-#if 0
+#ifdef _DEBUG
+// #if 0
 	Com<ID3D12InfoQueue> infoQueue;
 	if (SUCCEEDED(_device.As(&infoQueue))) {
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
+		// infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+		// infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
 
 		// Suppress whole categories of messages
 		// D3D12_MESSAGE_CATEGORY categories[] = {};

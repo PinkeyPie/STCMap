@@ -7,7 +7,7 @@ DxPage::DxPage(uint64 pageSize) : _pageSize(pageSize) {}
 
 void DxPage::Init(ID3D12Device* device) {
 	auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(_pageSize);
-	auto heapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+	auto heapDesc = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 
 	ThrowIfFailed(device->CreateCommittedResource(
 		&heapDesc,
@@ -33,9 +33,9 @@ DxPage* DxPagePool::GetFreePage() {
 	_mutex.unlock();
 
 	if (not page) {
-		DxDevice device = DxContext::Instance().GetDevice();
+		ID3D12Device5* device = DxContext::Instance().GetDevice();
 		page = new DxPage{_pageSize};
-		page->Init(device.Get());
+		page->Init(device);
 	}
 
 	return page;
@@ -51,6 +51,7 @@ void DxPagePool::ReturnPage(DxPage* page) {
 
 void DxPagePool::Reset() {
 	LastUsedPage = nullptr;
+	_freePages.resize(_usedPages.size());
 	std::ranges::copy(_usedPages, _freePages.begin());
 	_usedPages.clear();
 }
