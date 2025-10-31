@@ -31,7 +31,8 @@ struct PbrMaterialCb
 "DescriptorTable(SRV(t0, numDescriptors=4), visibility=SHADER_VISIBILITY_PIXEL),"\
 "DescriptorTable(SRV(t0, space=1, numDescriptors=2), visibility=SHADER_VISIBILITY_PIXEL),"\
 "StaticSampler(s1, addressU=TEXTURE_ADDRESS_CLAMP, addressV=TEXTURE_ADDRESS_CLAMP, addressW=TEXTURE_ADDRESS_CLAMP, filter=FILTER_MIN_MAG_MIP_LINEAR, visibility=SHADER_VISIBILITY_PIXEL),"\
-"DescriptorTable(SRV(t0, space=2, numDescriptors=1), visibility=SHADER_VISIBILITY_PIXEL)"
+"DescriptorTable(SRV(t0, space=2, numDescriptors=1), visibility=SHADER_VISIBILITY_PIXEL),"\
+"DescriptorTable(SRV(t0, space=3, numDescriptors=4), visibility=SHADER_VISIBILITY_PIXEL)"
 
 #define MODEL_DEPTH_ONLY_RS \
 "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | DENY_HULL_SHADER_ROOT_ACCESS | DENY_DOMAIN_SHADER_ROOT_ACCESS | DENY_GEOMETRY_SHADER_ROOT_ACCESS | DENY_PIXEL_SHADER_ROOT_ACCESS),"\
@@ -42,5 +43,6 @@ struct PbrMaterialCb
 #define ModelRsPbrTextures          2
 #define ModelRsEnvironmentTextures  3
 #define ModelRsBrdf                 4
+#define ModelRsLights               5
 
 #endif

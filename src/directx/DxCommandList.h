@@ -7,15 +7,6 @@
 
 class DxRenderTarget;
 
-struct DxDynamicConstantBuffer {
-	D3D12_GPU_VIRTUAL_ADDRESS GpuPtr;
-	void* CpuPtr;
-};
-
-struct DxDynamicVertexBuffer {
-	D3D12_VERTEX_BUFFER_VIEW View;
-};
-
 struct DxCommandAllocator {
 	Com<ID3D12CommandAllocator> CommandAllocator;
 	DxCommandAllocator* Next;
@@ -25,15 +16,8 @@ struct DxCommandAllocator {
 class DxCommandList {
 public:
 	D3D12_COMMAND_LIST_TYPE Type;
-	DxCommandAllocator* CommandAllocator;
-	DxGraphicsCommandList CommandList;
-	uint64 UsedLastOnFrame;
 
-	DxCommandList* Next;
-
-	DxUploadBuffer UploadBuffer;
-
-	ID3D12DescriptorHeap* DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
+	ID3D12GraphicsCommandList4* CommandList() const { return _commandList.Get(); }
 
 	// Barriers
 	void Barriers(CD3DX12_RESOURCE_BARRIER* barriers, uint32 numBarriers);
@@ -52,7 +36,6 @@ public:
 
 	// Copy.
 	void CopyResource(DxResource from, DxResource to);
-
 
 	// Pipeline.
 	void SetPipelineState(DxPipelineState pipelineState);
@@ -107,6 +90,9 @@ public:
 	void SetComputeDescriptorTable(uint32 rootParameterIndex, CD3DX12_GPU_DESCRIPTOR_HANDLE handle);
 	void SetComputeDescriptorTable(uint32 rootParameterIndex, DxDescriptorHandle handle);
 
+	void ClearUAV(DxResource resource, CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle, CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle, float val = 0.f);
+	void ClearUAV(DxResource resource, CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle, CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle, uint32 val = 0);
+
 	// Input assembly.
 	void SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology);
 	void SetVertexBuffer(uint32 slot, DxVertexBuffer& buffer);
@@ -147,6 +133,17 @@ public:
 	void Raytrace(D3D12_DISPATCH_RAYS_DESC& raytraceDesc);
 
 	void Reset(DxCommandAllocator* commandAllocator);
+
+private:
+	ID3D12DescriptorHeap* _descriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
+	DxCommandAllocator* _commandAllocator = nullptr;
+	DxGraphicsCommandList _commandList = nullptr;
+	DxUploadBuffer _uploadBuffer;
+	DxCommandList* _next;
+	uint64 _usedLastOnFrame;
+
+	friend class DxContext;
+	friend class DxCommandQueue;
 };
 
 template <typename T>

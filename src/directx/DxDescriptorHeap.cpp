@@ -182,6 +182,18 @@ DxDescriptorHandle DxDescriptorRange::PushBufferUAV(DxBuffer& buffer, BufferRang
 	return CreateBufferUAV(buffer, _pushIndex++, bufferRange);
 }
 
+DxDescriptorHandle DxDescriptorRange::CreateBufferUintUAV(DxBuffer &buffer, DxDescriptorHandle handle, BufferRange bufferRange) {
+	return buffer.CreateBufferUintUAV(GetDevice(DescriptorHeap), buffer, handle, bufferRange);
+}
+
+DxDescriptorHandle DxDescriptorRange::CreateBufferUintUAV(DxBuffer &buffer, uint32 index, BufferRange bufferRange) {
+	return buffer.CreateBufferUintUAV(GetDevice(DescriptorHeap), buffer, GetHandle(index), bufferRange);
+}
+
+DxDescriptorHandle DxDescriptorRange::PushBufferUintUAV(DxBuffer &buffer, BufferRange bufferRange) {
+	return CreateBufferUintUAV(buffer, _pushIndex++, bufferRange);
+}
+
 DxDescriptorHandle DxDescriptorRange::CreateRaytracingAccelerationStructureSRV(DxBuffer& tlas, DxDescriptorHandle handle) {
 	return tlas.CreateRaytracingAccelerationStructureSRV(GetDevice(DescriptorHeap), handle);
 }
@@ -241,24 +253,14 @@ DxDescriptorHandle DxDsvDescriptorHeap::PushDepthStencilView(DxTexture* texture)
 }
 
 DxDescriptorHandle DxDsvDescriptorHeap::CreateDepthStencilView(DxTexture* texture, DxDescriptorHandle index) {
-	D3D12_RESOURCE_DESC resourceDesc = texture->Resource->GetDesc();
-	DXGI_FORMAT format = resourceDesc.Format;
-	if (IsDepthFormat(format)) {
-		resourceDesc.Format = GetTypelessFormat(format);
-	}
+	DXGI_FORMAT format = texture->FormatSupport.Format;
 
-	assert(resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
-	assert(resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+	assert(IsDepthFormat(format));
 
-	if (IsDepthFormat(format)) {
-		D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-		dsvDesc.Format = format;
-		dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-		GetDevice(DescriptorHeap)->CreateDepthStencilView(texture->Resource.Get(), &dsvDesc, index.CpuHandle);
-	}
-	else {
-		GetDevice(DescriptorHeap)->CreateDepthStencilView(texture->Resource.Get(), nullptr, index.CpuHandle);
-	}
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+	dsvDesc.Format = format;
+	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	GetDevice(DescriptorHeap)->CreateDepthStencilView(texture->Resource.Get(), &dsvDesc, index.CpuHandle);
 
 	return index;
 }

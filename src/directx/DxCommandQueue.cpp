@@ -110,7 +110,7 @@ DxCommandList *DxCommandQueue::GetFreeCommandList() {
 	_mutex.lock();
 	DxCommandList* result = _freeCommandLists;
 	if (result) {
-		_freeCommandLists = result->Next;
+		_freeCommandLists = result->_next;
 	}
 	_mutex.unlock();
 
@@ -129,14 +129,14 @@ DxCommandAllocator *DxCommandQueue::GetFreeCommandAllocator() {
 }
 
 uint64 DxCommandQueue::Execute(DxCommandList* commandList) {
-	ThrowIfFailed(commandList->CommandList->Close());
+	ThrowIfFailed(commandList->CommandList()->Close());
 
-	ID3D12CommandList* d3d12List = commandList->CommandList.Get();
+	ID3D12CommandList* d3d12List = commandList->CommandList();
 	NativeQueue->ExecuteCommandLists(1, &d3d12List);
 
 	uint64 fenceValue = Signal();
 
-	DxCommandAllocator* allocator = commandList->CommandAllocator;
+	DxCommandAllocator* allocator = commandList->_commandAllocator;
 	allocator->LastExecutionFenceValue = fenceValue;
 
 	_mutex.lock();
@@ -145,7 +145,7 @@ uint64 DxCommandQueue::Execute(DxCommandList* commandList) {
 	_runningCommandAllocators = allocator;
 	AtomicIncrement(_numRunningCommandAllocators);
 
-	commandList->Next = _freeCommandLists;
+	commandList->_next = _freeCommandLists;
 	_freeCommandLists = commandList;
 
 	_mutex.unlock();

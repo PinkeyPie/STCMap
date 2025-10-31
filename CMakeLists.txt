@@ -3,6 +3,7 @@ project(STCMapEngine)
 
 set(CMAKE_CXX_STANDARD 23)
 set(PROJECT_NAME STCMapEngine)
+
 if(NOT MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-narrowing -Wno-sign-compare -Wno-unused-variable")
 endif ()
@@ -13,7 +14,6 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/scripts/build.py)
     find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
     execute_process(COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/build.py)
 endif()
-
 
 find_package(directxtex CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)

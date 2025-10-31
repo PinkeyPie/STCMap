@@ -161,7 +161,7 @@ void DirectWindow::SetSwapChainColorSpace() const {
 }
 
 void DirectWindow::UpdateRenderTargetView() {
-	DxDevice device = DxContext::Instance().GetDevice();
+	ID3D12Device5* device = DxContext::Instance().GetDevice();
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(_rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 

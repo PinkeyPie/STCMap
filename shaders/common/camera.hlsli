@@ -24,6 +24,7 @@ struct CameraCb
     vec2  InvScreenDims;
 };
 
+#ifdef HLSL
 static float3 RestoreViewSpacePosition(float2 uv, float depth, float4x4 invProj)
 {
     uv.y = 1.f - uv.y; // Flip Y for UV coords
@@ -64,14 +65,19 @@ static float3 RestoreWorldDirection(float2 uv, float4x4 invViewProj, float3 came
     return normalize(direction);
 }
 
-static float DepthBufferDepthToLinearNormalizedDepthEyeToFarPlane(float depthBufferDepth, float farOverNear, float oneMinusFarOverNear)
+static float DepthBufferToWorldSpaceDepth(float depthBufferDepth, float near, float far, float farOverNear, float oneMinusFarOverNear)
 {
-    return 1.f / (depthBufferDepth * oneMinusFarOverNear + farOverNear);
-}
-
-static float DepthBufferDepthToLinearWorldDepthEyeToFarPlane(float depthBufferDepth, float farOverNear, float oneMinusFarOverNear, float far)
-{
-    return DepthBufferDepthToLinearNormalizedDepthEyeToFarPlane(depthBufferDepth, farOverNear, oneMinusFarOverNear) * far; // near
+    if(far < 0.f) // Infinite far plane
+    {
+        depthBufferDepth = clamp(depthBufferDepth, 0.f, 1.f - 1e-7f);
+        return -near / (depthBufferDepth - 1.f);
+    }
+    else 
+    {
+        const float c1 = farOverNear;
+        const float c0 = oneMinusFarOverNear;
+        return far / (c0 * depthBufferDepth + c1);
+    }
 }
 
 struct CameraFrustumPlanes 
@@ -134,5 +140,6 @@ static bool CullModelSpaceAABB(CameraFrustumPlanes planes, float4 minAabb, float
 
     return false; // Not culled
 }
+#endif
 
 #endif

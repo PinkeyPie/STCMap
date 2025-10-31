@@ -1,12 +1,13 @@
 #include "rs/model_rs.hlsli"
 #include "common/brdf.hlsli"
+#include "rs/light_culling.hlsli"
 
 struct PsInput
 {
-    float2 uv            : TEXCOORDS;
-    float3x3 tbn         : TANGENT_FRAME;
-    float3 worldPosition : POSITION;
-    float4 position      : SV_Position;
+    float2 uv             : TEXCOORDS;
+    float3x3 tbn          : TANGENT_FRAME;
+    float3 worldPosition  : POSITION;
+    float4 screenPosition : SV_Position;
 };
 
 ConstantBuffer<PbrMaterialCb> material : register(b1);
@@ -23,6 +24,11 @@ TextureCube<float4> IrradianceTexture   : register(t0, space1);
 TextureCube<float4> EnvironmentTexture  : register(t1, space1);
 
 Texture2D<float4> Brdf                  : register(t0, space2);
+
+Texture2D<uint2> LightGrid                              : register(t0, space3);
+StructuredBuffer<uint> LightIndexList                   : register(t1, space3);
+StructuredBuffer<PointLightBoundingVolume> PointLights  : register(t2, space3);
+StructuredBuffer<SpotLightBoundingVolume> SpotLights    : register(t3, space3);
 
 // Todo
 static const float3 L = normalize(float3(1.f, 0.f, 0.3f));
@@ -53,18 +59,33 @@ float4 main(PsInput pin) : SV_Target
 
     float ao = 1.f;
 
+    const uint2 tileIndex = uint2(floor(pin.screenPosition.xy / LIGHT_CULLING_TILE_SIZE));
+    const uint2 lightIndexData = LightGrid.Load(int3(tileIndex, 0));
+    const uint lightOffset = lightIndexData.x;
+    const uint lightCount = lightIndexData.y;
+
     float3 camToPos = pin.worldPosition - CameraPosition.xyz;
     float3 V = -normalize(camToPos);
     float R0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo.xyz, metallic);
 
     float4 totalLighting = float4(0.f, 0.f, 0.f, albedo.w);
 
-    totalLighting.xyz += CalculateAmbientLighting(albedo.xyz, IrradianceTexture, EnvironmentTexture, Brdf, ClampSampler, N, V, R0, roughness, metallic, ao);
+    for(uint lightIndex = lightOffset; lightIndex < lightOffset + lightCount; lightIndex++) 
+    {
+        uint index = LightIndexList[lightIndex];
+        PointLightBoundingVolume pl = PointLights[index];
+        if(length(pl.Position - pin.worldPosition) < pl.Radius)
+        {
+            totalLighting.xyz += float3(0.4f, 0.f, 0.f);
+        }
+    }
+
+    // totalLighting.xyz += CalculateAmbientLighting(albedo.xyz, IrradianceTexture, EnvironmentTexture, Brdf, ClampSampler, N, V, R0, roughness, metallic, ao);
 
     float visibility = 1.f;
     float3 radiance = SunColor.xyz * visibility; // No attenuation for sun.
 
-    totalLighting.xyz += CalculateDirectLighting(albedo.xyz, radiance, N, L, V, R0, roughness, metallic);
+    // totalLighting.xyz += CalculateDirectLighting(albedo.xyz, radiance, N, L, V, R0, roughness, metallic);
 
     return totalLighting;
 }

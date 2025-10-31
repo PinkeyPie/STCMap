@@ -93,5 +93,6 @@ float4 main(PsInput pin) : SV_Target
         scene.rgb = LinearToST2084(scene.rgb * hdrScalar);
     }
 
+    scene.a = 1.f;
     return scene;
 }

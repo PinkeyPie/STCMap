@@ -2,7 +2,7 @@
 #include "DxRenderTarget.h"
 
 void DxCommandList::Barriers(CD3DX12_RESOURCE_BARRIER* barriers, uint32 numBarriers) {
-	CommandList->ResourceBarrier(numBarriers, barriers);
+	_commandList->ResourceBarrier(numBarriers, barriers);
 }
 
 void DxCommandList::TransitionBarrier(DxTexture& texture, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to, uint32 subresource) {
@@ -15,7 +15,7 @@ void DxCommandList::TransitionBarrier(DxBuffer& buffer, D3D12_RESOURCE_STATES fr
 
 void DxCommandList::TransitionBarrier(DxResource resource, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to, uint32 subresource) {
 	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(resource.Get(), from, to, subresource);
-	CommandList->ResourceBarrier(1, &barrier);
+	_commandList->ResourceBarrier(1, &barrier);
 }
 
 void DxCommandList::UavBarrier(DxTexture& texture) {
@@ -28,7 +28,7 @@ void DxCommandList::UavBarrier(DxBuffer& buffer) {
 
 void DxCommandList::UavBarrier(DxResource resource) {
 	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::UAV(resource.Get());
-	CommandList->ResourceBarrier(1, &barrier);
+	_commandList->ResourceBarrier(1, &barrier);
 }
 
 void DxCommandList::AliasingBarrier(DxTexture& before, DxTexture& after) {
@@ -41,39 +41,39 @@ void DxCommandList::AliasingBarrier(DxBuffer& before, DxBuffer& after) {
 
 void DxCommandList::AliasingBarrier(DxResource before, DxResource after) {
 	CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Aliasing(before.Get(), after.Get());
-	CommandList->ResourceBarrier(1, &barrier);
+	_commandList->ResourceBarrier(1, &barrier);
 }
 
 void DxCommandList::CopyResource(DxResource from, DxResource to) {
-	CommandList->CopyResource(to.Get(), from.Get());
+	_commandList->CopyResource(to.Get(), from.Get());
 }
 
 void DxCommandList::SetPipelineState(DxPipelineState pipelineState) {
-	CommandList->SetPipelineState(pipelineState.Get());
+	_commandList->SetPipelineState(pipelineState.Get());
 }
 
 void DxCommandList::SetPipelineState(DxRaytracingPipelineState pipelineState) {
-	CommandList->SetPipelineState1(pipelineState.Get());
+	_commandList->SetPipelineState1(pipelineState.Get());
 }
 
 void DxCommandList::SetGraphicsRootSignature(DxRootSignature rootSignature) {
-	CommandList->SetGraphicsRootSignature(rootSignature.Get());
+	_commandList->SetGraphicsRootSignature(rootSignature.Get());
 }
 
 void DxCommandList::SetGraphics32BitConstants(uint32 rootParameterIndex, uint32 numConstants, const void* constants) {
-	CommandList->SetGraphicsRoot32BitConstants(rootParameterIndex, numConstants, constants, 0);
+	_commandList->SetGraphicsRoot32BitConstants(rootParameterIndex, numConstants, constants, 0);
 }
 
 void DxCommandList::SetComputeRootSignature(DxRootSignature rootSignature) {
-	CommandList->SetComputeRootSignature(rootSignature.Get());
+	_commandList->SetComputeRootSignature(rootSignature.Get());
 }
 
 void DxCommandList::SetCompute32BitConstants(uint32 rootParameterIndex, uint32 numConstants, const void* constants) {
-	CommandList->SetComputeRoot32BitConstants(rootParameterIndex, numConstants, constants, 0);
+	_commandList->SetComputeRoot32BitConstants(rootParameterIndex, numConstants, constants, 0);
 }
 
 DxAllocation DxCommandList::AllocateDynamicBuffer(uint32 sizeInBytes, uint32 alignment) {
-	DxAllocation allocation = UploadBuffer.Allocate(sizeInBytes, alignment);
+	DxAllocation allocation = _uploadBuffer.Allocate(sizeInBytes, alignment);
 	return allocation;
 }
 
@@ -85,22 +85,22 @@ DxDynamicConstantBuffer DxCommandList::UploadDynamicConstantBuffer(uint32 sizeIn
 
 DxDynamicConstantBuffer DxCommandList::UploadAndSetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, uint32 sizeInBytes, const void* data) {
 	DxDynamicConstantBuffer address = UploadDynamicConstantBuffer(sizeInBytes, data);
-	CommandList->SetGraphicsRootConstantBufferView(rootParameterIndex, address.GpuPtr);
+	_commandList->SetGraphicsRootConstantBufferView(rootParameterIndex, address.GpuPtr);
 	return address;
 }
 
 void DxCommandList::SetGraphicsDynamicConstantBuffer(uint32 rootParameterIndex, DxDynamicConstantBuffer address) {
-	CommandList->SetGraphicsRootConstantBufferView(rootParameterIndex, address.GpuPtr);
+	_commandList->SetGraphicsRootConstantBufferView(rootParameterIndex, address.GpuPtr);
 }
 
 DxDynamicConstantBuffer DxCommandList::UploadAndSetComputeDynamicConstantBuffer(uint32 rootParameterIndex, uint32 sizeInBytes, const void* data) {
 	DxDynamicConstantBuffer address = UploadDynamicConstantBuffer(sizeInBytes, data);
-	CommandList->SetComputeRootConstantBufferView(rootParameterIndex, address.GpuPtr);
+	_commandList->SetComputeRootConstantBufferView(rootParameterIndex, address.GpuPtr);
 	return address;
 }
 
 void DxCommandList::SetComputeDynamicConstantBuffer(uint32 rootParameterIndex, DxDynamicConstantBuffer address) {
-	CommandList->SetComputeRootConstantBufferView(rootParameterIndex, address.GpuPtr);
+	_commandList->SetComputeRootConstantBufferView(rootParameterIndex, address.GpuPtr);
 }
 
 DxDynamicVertexBuffer DxCommandList::CreateDynamicVertexBuffer(uint32 elementSize, uint32 elementCount, void* data) {
@@ -117,70 +117,70 @@ DxDynamicVertexBuffer DxCommandList::CreateDynamicVertexBuffer(uint32 elementSiz
 }
 
 void DxCommandList::SetGraphicsUAV(uint32 rootParameterIndex, DxBuffer &buffer) {
-	CommandList->SetGraphicsRootUnorderedAccessView(rootParameterIndex, buffer.GpuVirtualAddress);
+	_commandList->SetGraphicsRootUnorderedAccessView(rootParameterIndex, buffer.GpuVirtualAddress);
 }
 
 void DxCommandList::SetGraphicsUAV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address) {
-	CommandList->SetGraphicsRootUnorderedAccessView(rootParameterIndex, address);
+	_commandList->SetGraphicsRootUnorderedAccessView(rootParameterIndex, address);
 }
 
 void DxCommandList::SetComputeUAV(uint32 rootParameterIndex, DxBuffer &buffer) {
-	CommandList->SetComputeRootUnorderedAccessView(rootParameterIndex, buffer.GpuVirtualAddress);
+	_commandList->SetComputeRootUnorderedAccessView(rootParameterIndex, buffer.GpuVirtualAddress);
 }
 
 void DxCommandList::SetComputeUAV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address) {
-	CommandList->SetComputeRootUnorderedAccessView(rootParameterIndex, address);
+	_commandList->SetComputeRootUnorderedAccessView(rootParameterIndex, address);
 }
 
 void DxCommandList::SetGraphicsSRV(uint32 rootParameterIndex, DxBuffer &buffer) {
-	CommandList->SetGraphicsRootShaderResourceView(rootParameterIndex, buffer.GpuVirtualAddress);
+	_commandList->SetGraphicsRootShaderResourceView(rootParameterIndex, buffer.GpuVirtualAddress);
 }
 
 void DxCommandList::SetGraphicsSRV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address) {
-	CommandList->SetGraphicsRootShaderResourceView(rootParameterIndex, address);
+	_commandList->SetGraphicsRootShaderResourceView(rootParameterIndex, address);
 }
 
 void DxCommandList::SetComputeSRV(uint32 rootParameterIndex, DxBuffer &buffer) {
-	CommandList->SetComputeRootShaderResourceView(rootParameterIndex, buffer.GpuVirtualAddress);
+	_commandList->SetComputeRootShaderResourceView(rootParameterIndex, buffer.GpuVirtualAddress);
 }
 
 void DxCommandList::SetComputeSRV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address) {
-	CommandList->SetComputeRootShaderResourceView(rootParameterIndex, address);
+	_commandList->SetComputeRootShaderResourceView(rootParameterIndex, address);
 }
 
 void DxCommandList::SetDescriptorHeap(DxDescriptorHeap& descriptorHeap) {
-	DescriptorHeaps[descriptorHeap.Type] = descriptorHeap.DescriptorHeap.Get();
+	_descriptorHeaps[descriptorHeap.Type] = descriptorHeap.DescriptorHeap.Get();
 
 	uint32 numDescriptorHeaps = 0;
 	ID3D12DescriptorHeap* heaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES] = {};
 
 	for (uint32 i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
-		ID3D12DescriptorHeap* heap = DescriptorHeaps[i];
+		ID3D12DescriptorHeap* heap = _descriptorHeaps[i];
 		if (heap) {
 			heaps[numDescriptorHeaps++] = heap;
 		}
 	}
 
-	CommandList->SetDescriptorHeaps(numDescriptorHeaps, heaps);
+	_commandList->SetDescriptorHeaps(numDescriptorHeaps, heaps);
 }
 
 void DxCommandList::SetDescriptorHeap(DxDescriptorRange& descriptorRange) {
-	DescriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = descriptorRange.DescriptorHeap.Get();
+	_descriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV] = descriptorRange.DescriptorHeap.Get();
 
 	uint32 numDescriptorHeaps = 0;
 	ID3D12DescriptorHeap* heaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES] = {};
 	for (uint32 i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
-		ID3D12DescriptorHeap* heap = DescriptorHeaps[i];
+		ID3D12DescriptorHeap* heap = _descriptorHeaps[i];
 		if (heap) {
 			heaps[numDescriptorHeaps++] = heap;
 		}
 	}
 
-	CommandList->SetDescriptorHeaps(numDescriptorHeaps, heaps);
+	_commandList->SetDescriptorHeaps(numDescriptorHeaps, heaps);
 }
 
 void DxCommandList::SetGraphicsDescriptorTable(uint32 rootParameterIndex, CD3DX12_GPU_DESCRIPTOR_HANDLE handle) {
-	CommandList->SetGraphicsRootDescriptorTable(rootParameterIndex, handle);
+	_commandList->SetGraphicsRootDescriptorTable(rootParameterIndex, handle);
 }
 
 void DxCommandList::SetGraphicsDescriptorTable(uint32 rootParameterIndex, DxDescriptorHandle handle) {
@@ -188,52 +188,62 @@ void DxCommandList::SetGraphicsDescriptorTable(uint32 rootParameterIndex, DxDesc
 }
 
 void DxCommandList::SetComputeDescriptorTable(uint32 rootParameterIndex, CD3DX12_GPU_DESCRIPTOR_HANDLE handle) {
-	CommandList->SetComputeRootDescriptorTable(rootParameterIndex, handle);
+	_commandList->SetComputeRootDescriptorTable(rootParameterIndex, handle);
 }
 
 void DxCommandList::SetComputeDescriptorTable(uint32 rootParameterIndex, DxDescriptorHandle handle) {
 	SetComputeDescriptorTable(rootParameterIndex, handle.GpuHandle);
 }
 
+void DxCommandList::ClearUAV(DxResource resource, CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle, CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle, float val) {
+	float vals[] = { val, val, val, val };
+	_commandList->ClearUnorderedAccessViewFloat(gpuHandle, cpuHandle, resource.Get(), vals, 0, 0);
+}
+
+void DxCommandList::ClearUAV(DxResource resource, CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle, CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle, uint32 val) {
+	uint32 vals[] = { val, val, val, val };
+	_commandList->ClearUnorderedAccessViewUint(gpuHandle, cpuHandle, resource.Get(), vals, 0, 0);
+}
+
 void DxCommandList::SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY topology) {
-	CommandList->IASetPrimitiveTopology(topology);
+	_commandList->IASetPrimitiveTopology(topology);
 }
 
 void DxCommandList::SetVertexBuffer(uint32 slot, DxDynamicVertexBuffer buffer) {
-	CommandList->IASetVertexBuffers(slot, 1, &buffer.View);
+	_commandList->IASetVertexBuffers(slot, 1, &buffer.View);
 }
 
 void DxCommandList::SetVertexBuffer(uint32 slot, DxVertexBuffer& buffer) {
-	CommandList->IASetVertexBuffers(slot, 1, &buffer.View);
+	_commandList->IASetVertexBuffers(slot, 1, &buffer.View);
 }
 
 void DxCommandList::SetVertexBuffer(uint32 slot, D3D12_VERTEX_BUFFER_VIEW& buffer) {
-	CommandList->IASetVertexBuffers(slot, 1, &buffer);
+	_commandList->IASetVertexBuffers(slot, 1, &buffer);
 }
 
 void DxCommandList::SetIndexBuffer(DxIndexBuffer& buffer) {
-	CommandList->IASetIndexBuffer(&buffer.View);
+	_commandList->IASetIndexBuffer(&buffer.View);
 }
 
 void DxCommandList::SetIndexBuffer(D3D12_INDEX_BUFFER_VIEW& buffer) {
-	CommandList->IASetIndexBuffer(&buffer);
+	_commandList->IASetIndexBuffer(&buffer);
 }
 
 void DxCommandList::SetViewport(const D3D12_VIEWPORT& viewport) {
-	CommandList->RSSetViewports(1, &viewport);
+	_commandList->RSSetViewports(1, &viewport);
 }
 
 void DxCommandList::SetScissor(const D3D12_RECT& scissor) {
-	CommandList->RSSetScissorRects(1, &scissor);
+	_commandList->RSSetScissorRects(1, &scissor);
 }
 
 void DxCommandList::SetScreenRenderTarget(D3D12_CPU_DESCRIPTOR_HANDLE* rtvs, uint32 numRTVs, D3D12_CPU_DESCRIPTOR_HANDLE* dsv) {
-	CommandList->OMSetRenderTargets(numRTVs, rtvs, FALSE, dsv);
+	_commandList->OMSetRenderTargets(numRTVs, rtvs, FALSE, dsv);
 }
 
 void DxCommandList::SetRenderTarget(DxRenderTarget& renderTarget, uint32 arraySlice) {
 	D3D12_CPU_DESCRIPTOR_HANDLE* dsv = (renderTarget.DepthStencilFormat != DXGI_FORMAT_UNKNOWN) ? &renderTarget.DsvHandle : nullptr;
-	CommandList->OMSetRenderTargets(renderTarget.NumAttachments, renderTarget.RtvHandles, FALSE, dsv);
+	_commandList->OMSetRenderTargets(renderTarget.NumAttachments, renderTarget.RtvHandles, FALSE, dsv);
 }
 
 void DxCommandList::ClearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, float r, float g, float b, float a) {
@@ -242,35 +252,35 @@ void DxCommandList::ClearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, float r, float g, 
 }
 
 void DxCommandList::ClearRTV(D3D12_CPU_DESCRIPTOR_HANDLE rtv, const float* clearColor) {
-	CommandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+	_commandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 }
 
 void DxCommandList::ClearDepth(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float depth) {
-	CommandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, depth, 0, 0, nullptr);
+	_commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, depth, 0, 0, nullptr);
 }
 
 void DxCommandList::ClearStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, uint32 stencil) {
-	CommandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_STENCIL, 0.f, stencil, 0, nullptr);
+	_commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_STENCIL, 0.f, stencil, 0, nullptr);
 }
 
 void DxCommandList::ClearDepthAndStencil(D3D12_CPU_DESCRIPTOR_HANDLE dsv, float depth, uint32 stencil) {
-	CommandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, depth, stencil, 0, nullptr);
+	_commandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, depth, stencil, 0, nullptr);
 }
 
 void DxCommandList::SetStencilReference(uint32 stencilReference) {
-	CommandList->OMSetStencilRef(stencilReference);
+	_commandList->OMSetStencilRef(stencilReference);
 }
 
 void DxCommandList::SetBlendFactor(const float* blendFactor) {
-	CommandList->OMSetBlendFactor(blendFactor);
+	_commandList->OMSetBlendFactor(blendFactor);
 }
 
 void DxCommandList::ResolveSubresource(DxResource dst, UINT dstSubresource, DxResource src, UINT srcSubresource, DXGI_FORMAT format) {
-	CommandList->ResolveSubresource(dst.Get(), dstSubresource, src.Get(), srcSubresource, format);
+	_commandList->ResolveSubresource(dst.Get(), dstSubresource, src.Get(), srcSubresource, format);
 }
 
 void DxCommandList::Draw(uint32 vertexCount, uint32 instanceCount, uint32 startVertex, uint32 startInstance) {
-	CommandList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
+	_commandList->DrawInstanced(vertexCount, instanceCount, startVertex, startInstance);
 }
 
 void DxCommandList::DrawFullscreenTriangle() {
@@ -279,11 +289,11 @@ void DxCommandList::DrawFullscreenTriangle() {
 }
 
 void DxCommandList::DrawIndexed(uint32 indexCount, uint32 instanceCount, uint32 startIndex, int32 baseVertex, uint32 startInstance) {
-	CommandList->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
+	_commandList->DrawIndexedInstanced(indexCount, instanceCount, startIndex, baseVertex, startInstance);
 }
 
 void DxCommandList::DrawIndirect(DxCommandSignature commandSignature, uint32 numDraws, DxBuffer commandBuffer) {
-	CommandList->ExecuteIndirect(
+	_commandList->ExecuteIndirect(
 		commandSignature.Get(),
 		numDraws,
 		commandBuffer.Resource.Get(),
@@ -294,7 +304,7 @@ void DxCommandList::DrawIndirect(DxCommandSignature commandSignature, uint32 num
 }
 
 void DxCommandList::DrawIndirect(DxCommandSignature commandSignature, uint32 maxNumDraws, DxBuffer numDrawsBuffer, DxBuffer commandBuffer) {
-	CommandList->ExecuteIndirect(
+	_commandList->ExecuteIndirect(
 		commandSignature.Get(),
 		maxNumDraws,
 		commandBuffer.Resource.Get(),
@@ -305,11 +315,11 @@ void DxCommandList::DrawIndirect(DxCommandSignature commandSignature, uint32 max
 }
 
 void DxCommandList::Dispatch(uint32 numGroupsX, uint32 numGroupsY, uint32 numGroupsZ) {
-	CommandList->Dispatch(numGroupsX, numGroupsY, numGroupsZ);
+	_commandList->Dispatch(numGroupsX, numGroupsY, numGroupsZ);
 }
 
 void DxCommandList::DispatchIndirect(DxCommandSignature commandSignature, uint32 numDispatches, DxBuffer commandBuffer) {
-	CommandList->ExecuteIndirect(
+	_commandList->ExecuteIndirect(
 		commandSignature.Get(),
 		numDispatches,
 		commandBuffer.Resource.Get(),
@@ -320,7 +330,7 @@ void DxCommandList::DispatchIndirect(DxCommandSignature commandSignature, uint32
 }
 
 void DxCommandList::DispatchIndirect(DxCommandSignature commandSignature, uint32 maxNumDispatches, DxBuffer numDispatchesBuffer, DxBuffer commandBuffer) {
-	CommandList->ExecuteIndirect(
+	_commandList->ExecuteIndirect(
 		commandSignature.Get(),
 		maxNumDispatches,
 		commandBuffer.Resource.Get(),
@@ -331,16 +341,16 @@ void DxCommandList::DispatchIndirect(DxCommandSignature commandSignature, uint32
 }
 
 void DxCommandList::Raytrace(D3D12_DISPATCH_RAYS_DESC& raytraceDesc) {
-	CommandList->DispatchRays(&raytraceDesc);
+	_commandList->DispatchRays(&raytraceDesc);
 }
 
 void DxCommandList::Reset(DxCommandAllocator* commandAllocator) {
-	CommandAllocator = commandAllocator;
-	ThrowIfFailed(CommandList->Reset(commandAllocator->CommandAllocator.Get(), nullptr));
+	_commandAllocator = commandAllocator;
+	ThrowIfFailed(_commandList->Reset(commandAllocator->CommandAllocator.Get(), nullptr));
 
 	for (uint32 i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; i++) {
-		DescriptorHeaps[i] = nullptr;
+		_descriptorHeaps[i] = nullptr;
 	}
 
-	UploadBuffer.Reset();
+	_uploadBuffer.Reset();
 }

@@ -8,6 +8,7 @@
 #include "../pch.h"
 #include <cmath>
 #include <cfloat>
+#include <ostream>
 
 #include "simd.h"
 
@@ -45,11 +46,16 @@ union vec3 {
 		float r, g, b;
 	};
 	struct {
-		float e[3];
+		vec2 xy;
+		float z;
+	};
+	struct {
+		float data[3];
 	};
 
 	vec3() {}
 	vec3(float x_, float y_, float z_) { x = x_; y = y_; z = z_; }
+	vec3(vec2 v2, float z_) { x= v2.x; y = v2.y; z = z_; }
 };
 
 union vec4 {
@@ -471,4 +477,17 @@ vec3 GetBarycentricCoordinates(vec2 a, vec2 b, vec2 c, vec2 p);
 vec3 GetBarycentricCoordinates(vec3 a, vec3 b, vec3 c, vec3 p);
 bool InsideTriangle(vec3 barycentrics);
 
+inline std::ostream& operator<<(std::ostream& s, vec2 v) {
+	s << "[" << v.x << ", " << v.y << "]";
+	return s;
+}
 
+inline std::ostream& operator<<(std::ostream& s, vec3 v) {
+	s << "[" << v.x << ", " << v.y << ", " << v.z << "]";
+	return s;
+}
+
+inline std::ostream& operator<<(std::ostream& s, vec4 v) {
+	s << "[" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << "]";
+	return s;
+}

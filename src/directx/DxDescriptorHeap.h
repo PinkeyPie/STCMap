@@ -37,10 +37,15 @@ public:
 
 		return {.CpuHandle = cpuHandle, .GpuHandle = gpuHandle };
 	}
-	void SetBase(DxDescriptorHandle handle);
-	uint32 GetIncrementSize() const {
-		return _descriptorHandleIncrementSize;
+	DxDescriptorHandle GetHandle(const DxDescriptorHandle& base, uint32 offset) {
+		const CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle(base.GpuHandle, offset, _descriptorHandleIncrementSize);
+		const CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle(base.CpuHandle, offset, _descriptorHandleIncrementSize);
+
+		return {cpuHandle, gpuHandle};
 	}
+
+	void SetBase(DxDescriptorHandle handle);
+	uint32 GetIncrementSize() const { return _descriptorHandleIncrementSize; }
 
 protected:
 	void Initialize(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors, bool shaderVisible);
@@ -87,7 +92,7 @@ public:
 
 	DxDescriptorHandle Create2DTextureUAV(DxTexture& texture, DxDescriptorHandle handle, uint32 mipSlice = 0, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN);
 	DxDescriptorHandle Create2DTextureUAV(DxTexture& texture, uint32 index, uint32 mipSlice, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN);
-	DxDescriptorHandle Push2DTextureUAV(DxTexture& texture, uint32 mipSlice, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN);
+	DxDescriptorHandle Push2DTextureUAV(DxTexture& texture, uint32 mipSlice = 0, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN);
 
 	DxDescriptorHandle Create2DTextureArrayUAV(DxTexture& texture, DxDescriptorHandle handle, uint32 mipSlice = 0, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN);
 	DxDescriptorHandle Create2DTextureArrayUAV(DxTexture& texture, uint32 index, uint32 mipSlice = 0, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN);
@@ -100,6 +105,10 @@ public:
 	DxDescriptorHandle CreateBufferUAV(DxBuffer& buffer, DxDescriptorHandle handle, BufferRange bufferRange = {});
 	DxDescriptorHandle CreateBufferUAV(DxBuffer& buffer, uint32 index, BufferRange bufferRange = {});
 	DxDescriptorHandle PushBufferUAV(DxBuffer& buffer, BufferRange bufferRange = {});
+
+	DxDescriptorHandle CreateBufferUintUAV(DxBuffer& buffer, DxDescriptorHandle handle, BufferRange bufferRange = {});
+	DxDescriptorHandle CreateBufferUintUAV(DxBuffer& buffer, uint32 index, BufferRange bufferRange = {});
+	DxDescriptorHandle PushBufferUintUAV(DxBuffer& buffer, BufferRange bufferRange = {});
 
 	DxDescriptorHandle CreateRaytracingAccelerationStructureSRV(DxBuffer& tlas, DxDescriptorHandle handle);
 	DxDescriptorHandle CreateRaytracingAccelerationStructureSRV(DxBuffer& tlas, uint32 index);

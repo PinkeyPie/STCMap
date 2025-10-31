@@ -9,6 +9,9 @@
 #include "present_rs.hlsli"
 #include "../physics/mesh.h"
 
+#define MAX_NUM_POINT_LIGHTS_PER_FRAME 4096
+#define MAX_NUM_SPOT_LIGHTS_PER_FRAME 4096
+
 enum AspectRatioMode {
 	EAspectRatioFree,
 	EAspectRatioFix16_9,
@@ -24,14 +27,16 @@ static const char* aspectRatioNames[] = {
 };
 
 enum GizmoType {
+	EGizmoTypeNone,
 	EGizmoTypeTranslation,
 	EGizmoTypeRotation,
 	EGizmoTypeScale,
 
-	EgizmoTypeCount
+	EGizmoTypeCount
 };
 
 static const char* gizmoTypeNames[] = {
+	"None",
 	"Translation",
 	"Rotation",
 	"Scale"
@@ -47,6 +52,26 @@ struct PbrEnvironment {
 	DxDescriptorHandle IrradianceSRV;
 };
 
+struct LightCullingBuffers {
+	DxBuffer TiledFrustum;
+	DxBuffer PointLightBoundingVolumes;
+	DxBuffer SpotLightBoundingVolumes;
+
+	DxBuffer OpaqueLightIndexCounter;
+	DxBuffer OpaqueLightIndexList;
+
+	DxTexture OpaqueLightGrid;
+
+	uint32 NumTilesX;
+	uint32 NumTilesY;
+
+	DxDescriptorHandle ResourceHandle;
+	DxDescriptorHandle OpaqueLightGridSRV;
+
+	DxDescriptorHandle OpaqueLightIndexCounterUAV_CPU;
+	DxDescriptorHandle OpaqueLightIndexCounterUAV_GPU;
+};
+
 class DxRenderer {
 public:
 	DxRenderer() = default;
@@ -56,18 +81,22 @@ public:
 	}
 	void Initialize(uint32 width, uint32 height);
 
-	void BeginFrame(uint32 width, uint32 height);
+	void BeginFrame(uint32 width, uint32 height, float dt);
 	void BeginFrame(CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle, DxResource renderTarget);
 	void RecalculateViewport(bool resizeTextures);
+	void FillCameraConstantBuffer(struct CameraCb& cb);
+	void AllocateLightCullingBuffers();
 	int DummyRender(float dt);
 	DxTexture FrameResult;
 
 	DxCbvSrvUavDescriptorHeap GlobalDescriptorHeap;
+	DxCbvSrvUavDescriptorHeap GlobalDescriptorHeapCPU;
 
 private:
 	static DxRenderer* _instance;
 
 	RenderCamera _camera = {};
+	DxDynamicConstantBuffer _cameraCBV;
 
 	TonemapCb _tonemap = DefaultTonemapParameters();
 
@@ -80,6 +109,9 @@ private:
 	DxTexture _hdrColorTexture;
 	DxDescriptorHandle _hdrColorTextureSrv;
 	DxTexture _depthBuffer;
+	DxDescriptorHandle _depthBufferSRV;
+
+	LightCullingBuffers _lightCullingBuffers;
 
 	uint32 _renderWidth;
 	uint32 _renderHeight;
@@ -94,6 +126,10 @@ private:
 	DxPipeline _modelPipeline;
 	DxPipeline _modelDepthOnlyPipeline;
 	DxPipeline _outlinePipeline;
+	DxPipeline _flatUnlitPipeline;
+
+	DxPipeline _worldSpaceFrustumPipeline;
+	DxPipeline _lightCullingPipeline;
 
 	CompositeMesh _sceneMesh;
 	DxTexture _meshAlbedoTex;
@@ -107,27 +143,31 @@ private:
 	DxTexture _whiteTexture;
 	DxDescriptorHandle _whiteTextureSRV;
 
-	DxMesh _skyMesh;
 	DxMesh _gizmoMesh;
+	DxMesh _positionOnlyMesh;
+	SubmeshInfo _cubeMesh;
+	SubmeshInfo _sphereMesh;
+
 	PbrEnvironment _environment;
 
 	static union {
 		struct {
+			SubmeshInfo NoneGizmoSubmesh;
 			SubmeshInfo TranslationGizmoSubmesh;
 			SubmeshInfo RotationGizmoSubmesh;
 			SubmeshInfo ScaleGizmoSubmesh;
 		};
 
-		SubmeshInfo gizmoSubmeshes[3];
+		SubmeshInfo gizmoSubmeshes[4];
 	};
 
-	quat _gizmoRotations[] = {
+	quat _gizmoRotations[3] = {
 		quat(vec3(0.f, 0.f, -1.f), deg2rad(90.f)),
 		quat::identity,
 		quat(vec3(1.f, 0.f, 0.f), deg2rad(90.f))
 	};
 
-	vec4 _gizmoColors[] = {
+	vec4 _gizmoColors[3] = {
 		vec4(1.f, 0.f, 0.f, 1.f),
 		vec4(0.f, 1.f, 0.f, 1.f),
 		vec4(0.f, 0.f, 1.f, 1.f)

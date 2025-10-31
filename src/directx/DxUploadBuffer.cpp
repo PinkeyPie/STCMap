@@ -84,7 +84,7 @@ DxAllocation DxUploadBuffer::Allocate(uint64 size, uint64 alignment) {
 }
 
 void DxUploadBuffer::Reset() {
-	if (CurrentPage) {
+	if (CurrentPage and PagePool) {
 		PagePool->ReturnPage(CurrentPage);
 	}
 	CurrentPage = nullptr;

@@ -36,7 +36,7 @@ void DxBuffer::Upload(const void* bufferData) {
 
 	commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
 
-	UpdateSubresources(commandList->CommandList.Get(),
+	UpdateSubresources(commandList->CommandList(),
 		Resource.Get(), intermediateResource.Get(),
 		0, 0, 1, &subresourceData);
 
@@ -71,7 +71,7 @@ void DxBuffer::UpdateDataRange(const void* data, uint32 offset, uint32 size) {
 	memcpy(mapped, data, size);
 	intermediateResource->Unmap(0, nullptr);
 
-	commandList->CommandList->CopyBufferRegion(Resource.Get(), offset, intermediateResource.Get(), 0, size);
+	commandList->CommandList()->CopyBufferRegion(Resource.Get(), offset, intermediateResource.Get(), 0, size);
 
 	// We are omitting the transition to common here, since the resource automatically decays to common state after being accessed on a copy queue.
 
@@ -214,6 +214,28 @@ DxDescriptorHandle DxBuffer::CreateUAV(DxDevice device, DxDescriptorHandle index
 
 	return index;
 }
+
+DxDescriptorHandle DxBuffer::CreateBufferUintUAV(DxDevice device, DxBuffer &buffer, DxDescriptorHandle index, BufferRange bufferRange) {
+	uint32 firstElementByteOffset = bufferRange.FirstElement * ElementSize;
+	assert(firstElementByteOffset % 16 == 0);
+
+	uint32 count = (bufferRange.NumElements != -1) ? bufferRange.NumElements : (buffer.ElementCount - bufferRange.FirstElement);
+	uint32 totalSize = count* ElementSize;
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+	uavDesc.Format = DXGI_FORMAT_R32_UINT;
+	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+	uavDesc.Buffer.CounterOffsetInBytes = 0;
+	uavDesc.Buffer.FirstElement = firstElementByteOffset / 4;
+	uavDesc.Buffer.NumElements = totalSize / 4;
+	uavDesc.Buffer.StructureByteStride = 0;
+	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+	device->CreateUnorderedAccessView(buffer.Resource.Get(), 0, &uavDesc, index.CpuHandle);
+
+	return index;
+}
+
 
 DxDescriptorHandle DxBuffer::CreateRaytracingAccelerationStructureSRV(DxDevice device, DxDescriptorHandle index) const {
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};

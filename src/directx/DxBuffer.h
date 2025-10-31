@@ -6,6 +6,15 @@
 class DxContext;
 struct DxDescriptorHandle;
 
+struct DxDynamicConstantBuffer {
+	D3D12_GPU_VIRTUAL_ADDRESS GpuPtr;
+	void* CpuPtr;
+};
+
+struct DxDynamicVertexBuffer {
+	D3D12_VERTEX_BUFFER_VIEW View;
+};
+
 struct BufferRange {
 	uint32 FirstElement = 0;
 	uint32 NumElements = (uint32)-1;
@@ -35,6 +44,7 @@ protected:
 	DxDescriptorHandle CreateUAV(DxDevice device, DxDescriptorHandle index, BufferRange bufferRange = {}) const;
 	DxDescriptorHandle CreateRawSRV(DxDevice device, DxDescriptorHandle index, BufferRange bufferRange = {});
 	DxDescriptorHandle CreateRaytracingAccelerationStructureSRV(DxDevice device, DxDescriptorHandle index) const;
+	DxDescriptorHandle CreateBufferUintUAV(DxDevice device, DxBuffer& buffer, DxDescriptorHandle index, BufferRange bufferRange = {});
 	friend class DxDescriptorRange;
 };
 

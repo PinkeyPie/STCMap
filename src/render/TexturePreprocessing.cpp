@@ -152,7 +152,7 @@ void TexturePreprocessor::GenerateMipMapsOnGPU(DxCommandList *cl, DxTexture &tex
     uint32 numDstMipLevels = resourceDesc.MipLevels - 1;
     uint32 numDescriptors = numSrcMipLevels + numDstMipLevels;
 
-    DxDescriptorRange descriptors = dxContext.AllocateContiguousDescriptorRange(numDescriptors);
+    DxDescriptorRange descriptors = dxContext.FrameDescriptorAllocator().AllocateContiguousDescriptorRange(numDescriptors);
 
     DxDescriptorHandle srvOffset;
     for (uint32 i = 0; i < numSrcMipLevels; i++) {
@@ -281,7 +281,7 @@ DxTexture TexturePreprocessor::EquirectangularToCubemap(DxCommandList *cl, DxTex
     EquirectangularToCubemapCb equirectangularToCubemapCb;
     equirectangularToCubemapCb.IsSRGB = isSRGB;
 
-    DxDescriptorRange descriptors = dxContext.AllocateContiguousDescriptorRange(numMips + 1);
+    DxDescriptorRange descriptors = dxContext.FrameDescriptorAllocator().AllocateContiguousDescriptorRange(numMips + 1);
 
     DxDescriptorHandle srvOffset = descriptors.Push2DTextureSRV(equirectangular);
 
@@ -369,7 +369,7 @@ DxTexture TexturePreprocessor::CubemapToIrradiance(DxCommandList *cl, DxTexture 
     cubemapToIrradianceCb.IrradianceMapSize = resolution;
     cubemapToIrradianceCb.UvzScale = uvzScale;
 
-    DxDescriptorRange descriptors = dxContext.AllocateContiguousDescriptorRange(2);
+    DxDescriptorRange descriptors = dxContext.FrameDescriptorAllocator().AllocateContiguousDescriptorRange(2);
     cl->SetDescriptorHeap(descriptors);
 
     DxDescriptorHandle uavOffset = descriptors.Push2DTextureArrayUAV(stagingTexture, 0, GetUAVCompatibleFormat(irradianceDesc.Format));
@@ -443,7 +443,7 @@ DxTexture TexturePreprocessor::PrefilterEnvironment(DxCommandList *cl, DxTexture
     PrefilteredEnvironmentCb prefilteredEnvironmentCb;
     prefilteredEnvironmentCb.TotalNumMipLevels = prefilteredDesc.MipLevels;
 
-    DxDescriptorRange descriptors = dxContext.AllocateContiguousDescriptorRange(prefilteredDesc.MipLevels + 1);
+    DxDescriptorRange descriptors = dxContext.FrameDescriptorAllocator().AllocateContiguousDescriptorRange(prefilteredDesc.MipLevels + 1);
     cl->SetDescriptorHeap(descriptors);
 
     DxDescriptorHandle srvOffset = descriptors.PushCubemapSRV(environment);
@@ -522,7 +522,7 @@ DxTexture TexturePreprocessor::IntegrateBRDF(DxCommandList *cl, uint32 resolutio
 
     cl->SetCompute32BitConstants(0, integrateBrdfCb);
 
-    DxDescriptorRange descriptors = dxContext.AllocateContiguousDescriptorRange(1);
+    DxDescriptorRange descriptors = dxContext.FrameDescriptorAllocator().AllocateContiguousDescriptorRange(1);
     cl->SetDescriptorHeap(descriptors);
 
     DxDescriptorHandle uav = descriptors.Push2DTextureUAV(stagingTexture, 0, GetUAVCompatibleFormat(desc.Format));

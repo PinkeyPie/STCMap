@@ -222,14 +222,14 @@ vec3 LineSegment::ClosestPoint(const vec3 &q) {
 vec3 AABBCollider::ClosestPoint(const vec3 &q) {
     vec3 result;
     for (int i = 0; i < 3; i++) {
-        float v = q.e[i];
-        if (v < MinCorner.e[i]) {
-            v = MinCorner.e[i];
+        float v = q.data[i];
+        if (v < MinCorner.data[i]) {
+            v = MinCorner.data[i];
         }
-        if (v > MaxCorner.e[i]) {
-            v = MaxCorner.e[i];
+        if (v > MaxCorner.data[i]) {
+            v = MaxCorner.data[i];
         }
-        result.e[i] = v;
+        result.data[i] = v;
     }
     return result;
 }

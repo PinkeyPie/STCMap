@@ -4,7 +4,8 @@ DxContext& DxContext::_instance = *new DxContext{};
 
 namespace {
 	void EnableDebugLayer() {
-#ifdef _DEBUG
+// #ifdef _DEBUG
+#if 0
 		Com<ID3D12Debug> debugInterface;
 		ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(debugInterface.GetAddressOf())));
 		debugInterface->EnableDebugLayer();
@@ -26,7 +27,8 @@ namespace {
 
 void DxContext::CreateFactory() {
 	uint32 createFactoryFlags = 0;
-#ifdef _DEBUG
+// #ifdef _DEBUG
+#if 0
 	createFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
@@ -60,7 +62,8 @@ void DxContext::CreateAdapter() {
 void DxContext::CreateDevice() {
 	ThrowIfFailed(D3D12CreateDevice(_adapter.Get(), D3D_FEATURE_LEVEL_12_2, IID_PPV_ARGS(_device.GetAddressOf())));
 
-#ifdef _DEBUG
+// #ifdef _DEBUG
+#if 0
 	Com<ID3D12InfoQueue> infoQueue;
 	if (SUCCEEDED(_device.As(&infoQueue))) {
 		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
@@ -138,9 +141,9 @@ DxCommandList* DxContext::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type) {
 	result->Type = type;
 
 	DxCommandAllocator* allocator = GetFreeCommandAllocator(type);
-	result->CommandAllocator = allocator;
+	result->_commandAllocator = allocator;
 
-	ThrowIfFailed(_device->CreateCommandList(0, type, allocator->CommandAllocator.Get(), nullptr, IID_PPV_ARGS(result->CommandList.GetAddressOf())))
+	ThrowIfFailed(_device->CreateCommandList(0, type, allocator->CommandAllocator.Get(), nullptr, IID_PPV_ARGS(result->_commandList.GetAddressOf())))
 
 	return result;
 }
@@ -172,8 +175,8 @@ DxCommandList* DxContext::GetFreeCommandList(DxCommandQueue& queue) {
 		result->Reset(allocator);
 	}
 
-	result->UsedLastOnFrame = _frameId;
-	result->UploadBuffer.PagePool = &_pagePools[_bufferFrameId];
+	result->_usedLastOnFrame = _frameId;
+	result->_uploadBuffer.PagePool = &_pagePools[_bufferFrameId];
 
 	return result;
 }
@@ -210,6 +213,17 @@ uint64 DxContext::ExecuteCommandList(DxCommandList* commandList) {
 	return queue.Execute(commandList);
 }
 
+DxAllocation DxContext::AllocateDynamicBuffer(uint32 sizeInBytes, uint32 alignment) {
+	DxAllocation allocation = _frameUploadBuffer.Allocate(sizeInBytes, alignment);
+	return allocation;
+}
+
+DxDynamicConstantBuffer DxContext::UploadDynamicConstantBuffer(uint32 sizeInBytes, const void *data) {
+	DxAllocation allocation = AllocateDynamicBuffer(sizeInBytes, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+	memcpy(allocation.CpuPtr, data, sizeInBytes);
+	return {allocation.GpuPtr, allocation.CpuPtr};
+}
+
 void DxContext::RetireObject(DxObject object) {
 	if (object) {
 		uint32 index = AtomicIncrement(_objectRetirement.NumRetireObjects[_bufferFrameId]);
@@ -226,6 +240,9 @@ void DxContext::NewFrame(uint64 frameId) {
 		_objectRetirement.RetiredObjects[_bufferFrameId][i].Reset();
 	}
 	_objectRetirement.NumRetireObjects[_bufferFrameId] = 0;
+
+	_frameUploadBuffer.Reset();
+	_frameUploadBuffer.PagePool = &_pagePools[_bufferFrameId];
 
 	_pagePools[_bufferFrameId].Reset();
 	_frameDescriptorAllocator.NewFrame(_bufferFrameId);
