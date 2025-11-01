@@ -7,6 +7,7 @@
 
 #include "math.h"
 #include "present_rs.hlsli"
+#include "../input.h"
 #include "../physics/mesh.h"
 
 #define MAX_NUM_POINT_LIGHTS_PER_FRAME 4096
@@ -83,6 +84,7 @@ public:
 
 	void BeginFrame(uint32 width, uint32 height, float dt);
 	void BeginFrame(CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle, DxResource renderTarget);
+	void HandleInput(const UserInput& input, float dt);
 	void RecalculateViewport(bool resizeTextures);
 	void FillCameraConstantBuffer(struct CameraCb& cb);
 	void AllocateLightCullingBuffers();
@@ -104,9 +106,9 @@ private:
 	D3D12_VIEWPORT _viewport;
 
 	DxRenderTarget _windowRenderTarget;
-	DxRenderTarget _hdrRenderTarget;
+	// DxRenderTarget _hdrRenderTarget;
 
-	DxTexture _hdrColorTexture;
+	// DxTexture _hdrColorTexture;
 	DxDescriptorHandle _hdrColorTextureSrv;
 	DxTexture _depthBuffer;
 	DxDescriptorHandle _depthBufferSRV;
@@ -118,7 +120,7 @@ private:
 	uint32 _windowWidth;
 	uint32 _windowHeight;
 
-	AspectRatioMode _aspectRatioMode;
+	AspectRatioMode _aspectRatioMode = EAspectRatioFree;
 
 	DxPipeline _textureSkyPipeline;
 	DxPipeline _proceduralSkyPipeline;

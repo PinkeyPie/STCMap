@@ -50,3 +50,6 @@ void RealCamera::RecalculateMatrices() {
 	InvViewProj = InvView * InvProj;
 }
 
+
+
+

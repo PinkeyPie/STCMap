@@ -63,12 +63,13 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 		_depthBuffer = DxTexture::CreateDepth(_renderWidth, _renderHeight, DXGI_FORMAT_D32_FLOAT);
 		_depthBufferSRV = GlobalDescriptorHeap.PushDepthTextureSRV(_depthBuffer);
 
-		_hdrColorTexture = DxTexture::Create(nullptr, _renderWidth, _renderHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, true);
-		SetName(_hdrColorTexture.Resource, "HDR Color texture");
-		_hdrColorTextureSrv = GlobalDescriptorHeap.Push2DTextureSRV(_hdrColorTexture);
+		// _hdrColorTexture = DxTexture::Create(nullptr, _renderWidth, _renderHeight, DXGI_FORMAT_R16G16B16A16_FLOAT, true);
+		// SetName(_hdrColorTexture.Resource, "HDR Color texture");
+		// _hdrColorTextureSrv = GlobalDescriptorHeap.Push2DTextureSRV(_hdrColorTexture);
 
-		_hdrRenderTarget.PushColorAttachment(_hdrColorTexture);
-		_hdrRenderTarget.PushDepthStencilAttachment(_depthBuffer);
+		// _hdrRenderTarget.PushColorAttachment(_hdrColorTexture);
+		// _hdrRenderTarget.PushDepthStencilAttachment(_depthBuffer);
+		_windowRenderTarget.PushDepthStencilAttachment(_depthBuffer);
 	}
 
 	DxPipelineFactory* pipelineFactory = DxPipelineFactory::Instance();
@@ -84,11 +85,14 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 	{
 		auto desc = CREATE_GRAPHICS_PIPELINE
 		.InputLayout(inputLayoutPositionUvNormalTangent)
-		.RenderTargets(0, 0, _hdrRenderTarget.DepthStencilFormat);
+		.RenderTargets(0, 0, _windowRenderTarget.DepthStencilFormat);
+		// .RenderTargets(0, 0, _hdrRenderTarget.DepthStencilFormat);
 
 		_modelDepthOnlyPipeline = pipelineFactory->CreateReloadablePipeline(desc, {"model_vs"}, "model_vs"); // The depth only RS is baked into the vertex shader
 
-		desc.RenderTargets(_hdrRenderTarget.RenderTargetFormat, _hdrRenderTarget.DepthStencilFormat)
+		desc
+		// .RenderTargets(_hdrRenderTarget.RenderTargetFormat, _hdrRenderTarget.DepthStencilFormat)
+		.RenderTargets(_windowRenderTarget.RenderTargetFormat, _windowRenderTarget.DepthStencilFormat)
 		.StencilSettings(D3D12_COMPARISON_FUNC_ALWAYS, D3D12_STENCIL_OP_REPLACE, D3D12_STENCIL_OP_REPLACE) // Mark areas in stencil, for example for outline
 		.DepthSettings(true, false, D3D12_COMPARISON_FUNC_EQUAL);
 
@@ -98,7 +102,8 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 	{
 		auto desc = CREATE_GRAPHICS_PIPELINE
 		.InputLayout(inputLayoutPosition)
-		.RenderTargets(_hdrRenderTarget.RenderTargetFormat)
+		// .RenderTargets(_hdrRenderTarget.RenderTargetFormat)
+		.RenderTargets(_windowRenderTarget.RenderTargetFormat)
 		.DepthSettings(false, false)
 		.CullFrontFaces();
 
@@ -109,7 +114,8 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 	{
 		auto desc = CREATE_GRAPHICS_PIPELINE
 		.InputLayout(inputLayoutPositionUvNormalTangent)
-		.RenderTargets(_hdrRenderTarget.RenderTargetFormat, _hdrRenderTarget.DepthStencilFormat)
+		// .RenderTargets(_hdrRenderTarget.RenderTargetFormat, _hdrRenderTarget.DepthStencilFormat)
+		.RenderTargets(_windowRenderTarget.RenderTargetFormat, _windowRenderTarget.DepthStencilFormat)
 		.StencilSettings(D3D12_COMPARISON_FUNC_NOT_EQUAL);
 
 		_outlinePipeline = pipelineFactory->CreateReloadablePipeline(desc, {"outline_vs", "outline_ps"}, "outline_vs");
@@ -125,7 +131,8 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 	{
 		auto desc = CREATE_GRAPHICS_PIPELINE
 		.InputLayout(inputLayoutPosition)
-		.RenderTargets(_hdrRenderTarget.RenderTargetFormat, _hdrRenderTarget.DepthStencilFormat)
+		// .RenderTargets(_hdrRenderTarget.RenderTargetFormat, _hdrRenderTarget.DepthStencilFormat)
+		.RenderTargets(_windowRenderTarget.RenderTargetFormat, _windowRenderTarget.DepthStencilFormat)
 		.Wireframe();
 
 		_flatUnlitPipeline = pipelineFactory->CreateReloadablePipeline(desc, {"flat_unlit_vs", "flat_unlit_ps"}, "flat_unlit_vs");
@@ -180,8 +187,9 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 	GlobalDescriptorHeap.Push2DTextureSRV(_meshMetalTex);
 
 	_meshTransform = trs::identity;
+	_meshTransform.position = vec3(0.f, 0.f, 0.f);
 	_meshTransform.rotation = quat(vec3(1.f, 0.f, 0.f), deg2rad(-90.f));
-	_meshTransform.scale = 0.04f;
+	_meshTransform.scale = 1.f;
 
 	{
 		DxTexture sky = DxTexture::LoadFromFile("assets/textures/aircraft_workshop_01_4k.hdr",
@@ -195,8 +203,9 @@ void DxRenderer::Initialize(uint32 width, uint32 height) {
 		_environment.Irradiance = preprocessor->CubemapToIrradiance(cl, _environment.Sky);
 		dxContext.ExecuteCommandList(cl);
 
-		_environment.IrradianceSRV = GlobalDescriptorHeap.PushCubemapSRV(_environment.Irradiance);
+
 		_environment.PrefilteredSRV = GlobalDescriptorHeap.PushCubemapSRV(_environment.Prefiltered);
+		_environment.IrradianceSRV = GlobalDescriptorHeap.PushCubemapSRV(_environment.Irradiance);
 		_environment.SkySRV = GlobalDescriptorHeap.PushCubemapSRV(_environment.Sky);
 
 		dxContext.RetireObject(sky.Resource);
@@ -223,8 +232,8 @@ void DxRenderer::FillCameraConstantBuffer(struct CameraCb &cb) {
 }
 
 void DxRenderer::BeginFrame(uint32 width, uint32 height, float dt) {
-	_hdrRenderTarget.ColorAttachments[0] = FrameResult.Resource;
-	_hdrRenderTarget.RtvHandles[0] = FrameResult.RTVHandles.CpuHandle;
+	_windowRenderTarget.ColorAttachments[0] = FrameResult.Resource;
+	_windowRenderTarget.RtvHandles[0] = FrameResult.RTVHandles.CpuHandle;
 
 	if (_windowWidth != width or _windowHeight != height) {
 		_windowWidth = width;
@@ -290,11 +299,11 @@ void DxRenderer::RecalculateViewport(bool resizeTextures) {
 	_renderHeight = (uint32)_windowViewport.Height;
 
 	if (resizeTextures) {
-		_hdrColorTexture.Resize(_renderWidth, _renderHeight);
+		// _hdrColorTexture.Resize(_renderWidth, _renderHeight);
 		_depthBuffer.Resize(_renderWidth, _renderHeight);
-		GlobalDescriptorHeap.Create2DTextureSRV(_hdrColorTexture, _hdrColorTextureSrv);
+		// GlobalDescriptorHeap.Create2DTextureSRV(_hdrColorTexture, _hdrColorTextureSrv);
 		GlobalDescriptorHeap.CreateDepthTextureSRV(_depthBuffer, _depthBufferSRV);
-		_hdrRenderTarget.NotifyOnTextureResize(_renderWidth, _renderHeight);
+		// _hdrRenderTarget.NotifyOnTextureResize(_renderWidth, _renderHeight);
 	}
 
 	AllocateLightCullingBuffers();
@@ -358,6 +367,49 @@ void DxRenderer::AllocateLightCullingBuffers() {
 	}
 }
 
+void DxRenderer::HandleInput(const UserInput &input, float dt) {
+	constexpr float cameraMovementSpeed = 0.2f;
+	constexpr float cameraSensivity = 4.f;
+	constexpr float cameraCenteringTime = 0.1f;
+	constexpr float orbitRadius = 2.f;
+
+	if (input.Mouse.Right.IsDown) {
+		vec3 cameraInputDir(
+			(input.Keyboard[EButton_d].IsDown ? -1.f : 0.f) + (input.Keyboard[EButton_a].IsDown ? 1.f : 0.f),
+			(input.Keyboard[EButton_e].IsDown ? 1.f : 0.f) + (input.Keyboard[EButton_q].IsDown ? -1.f : 0.f),
+			(input.Keyboard[EButton_w].IsDown ? 1.f : 0.f) + (input.Keyboard[EButton_s].IsDown ? -1.f : 0.f)
+		);
+		cameraInputDir *= (input.Keyboard[EButton_shift].IsDown ? 3.f : 1.f) * (input.Keyboard[EButton_ctrl].IsDown ? 0.1f : 1.f) * cameraMovementSpeed;
+
+		vec2 turnAngle(-input.Mouse.RelDx, -input.Mouse.RelDy);
+		turnAngle *= cameraSensivity;
+
+		quat& cameraRotation = _camera.Rotation;
+		cameraRotation = quat(vec3(0.f, 1.f, 0.f), turnAngle.x) * cameraRotation;
+		cameraRotation = cameraRotation * quat(vec3(1.f, 0.f, 0.f), turnAngle.y);
+
+		_camera.Position += cameraRotation * cameraInputDir * dt;
+	}
+	else if (input.Keyboard[EButton_alt].IsDown) {
+		if (input.Mouse.Left.IsDown) {
+			// Orbin the camera
+
+			vec2 turnAngle(0.f, 0.f);
+			turnAngle = vec2(-input.Mouse.RelDx, -input.Mouse.RelDy) * cameraSensivity;
+
+			quat& cameraRotation = _camera.Rotation;
+
+			vec3 center = _camera.Position + cameraRotation * vec3(0.f, 0.f, -orbitRadius);
+
+			cameraRotation = quat(vec3(0.f, 1.f, 0.f), turnAngle.x) * cameraRotation;
+			cameraRotation = cameraRotation * quat(vec3(1.f, 0.f, 0.f), turnAngle.y);
+
+			_camera.Position = center - cameraRotation * vec3(0.f, 0.f, -orbitRadius);
+		}
+	}
+
+	_camera.RecalculateMatrices(_renderWidth, _renderHeight);
+}
 
 int DxRenderer::DummyRender(float dt) {
 	DxContext& dxContext = DxContext::Instance();
@@ -371,21 +423,26 @@ int DxRenderer::DummyRender(float dt) {
 	DXGI_QUERY_VIDEO_MEMORY_INFO memoryInfo;
 	ThrowIfFailed(dxContext.GetAdapter()->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &memoryInfo));
 
-	quat deltaRotation(vec3(0.f, 1.f, 0.f), 2.f * PI * 0.1f * meshRotationSpeed * dt);
-	_meshTransform.rotation = deltaRotation * _meshTransform.rotation;
+	// quat deltaRotation(vec3(0.f, 1.f, 0.f), 2.f * PI * 0.1f * meshRotationSpeed * dt);
+	// _meshTransform.rotation = deltaRotation * _meshTransform.rotation;
 
 	CD3DX12_RECT scissorRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 
 	cl->SetScissor(scissorRect);
 
 	BarrierBatcher(cl)
-	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	// .Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	.Transition(_windowRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 	cl->SetDescriptorHeap(GlobalDescriptorHeap);
 
-	cl->SetRenderTarget(_hdrRenderTarget);
-	cl->SetViewport(_hdrRenderTarget.Viewport);
-	cl->ClearDepthAndStencil(_hdrRenderTarget.DsvHandle);
+	// cl->SetRenderTarget(_hdrRenderTarget);
+	// cl->SetViewport(_hdrRenderTarget.Viewport);
+	// cl->ClearDepthAndStencil(_hdrRenderTarget.DsvHandle);
+
+	cl->SetRenderTarget(_windowRenderTarget);
+	cl->SetViewport(_windowViewport);
+	cl->ClearDepthAndStencil(_windowRenderTarget.DsvHandle);
 
 	// Sky
 	cl->SetPipelineState(*_textureSkyPipeline.Pipeline);
@@ -400,7 +457,6 @@ int DxRenderer::DummyRender(float dt) {
 	cl->DrawIndexed(_cubeMesh.NumTriangles * 3, 1, _cubeMesh.FirstTriangle * 3, _cubeMesh.BaseVertex, 0);
 
 	// Models
-	auto submesh = _sceneMesh.SingleMeshes[0].Submesh;
 	mat4 m = trsToMat4(_meshTransform);
 	cl->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -415,8 +471,10 @@ int DxRenderer::DummyRender(float dt) {
 
 	cl->SetVertexBuffer(0, _sceneMesh.Mesh.VertexBuffer);
 	cl->SetIndexBuffer(_sceneMesh.Mesh.IndexBuffer);
-	cl->DrawIndexed(submesh.NumTriangles * 3, 1, submesh.FirstTriangle * 3, submesh.BaseVertex, 0);
-
+	for (int i = 0; i < _sceneMesh.SingleMeshes.size(); i++) {
+		auto submesh = _sceneMesh.SingleMeshes[i].Submesh;
+		cl->DrawIndexed(submesh.NumTriangles * 3, 1, submesh.FirstTriangle * 3, submesh.BaseVertex, 0);
+	}
 	// Gizmos
 	if (gizmoType != EGizmoTypeNone) {
 		cl->SetVertexBuffer(0, _gizmoMesh.VertexBuffer);
@@ -481,7 +539,10 @@ int DxRenderer::DummyRender(float dt) {
 	cl->SetStencilReference(1);
 	cl->SetVertexBuffer(0, _sceneMesh.Mesh.VertexBuffer);
 	cl->SetIndexBuffer(_sceneMesh.Mesh.IndexBuffer);
-	cl->DrawIndexed(submesh.NumTriangles * 3, 1, submesh.FirstTriangle * 3, submesh.BaseVertex, 0);
+	for (int i = 0; i < _sceneMesh.SingleMeshes.size(); i++) {
+		auto submesh = _sceneMesh.SingleMeshes[i].Submesh;
+		cl->DrawIndexed(submesh.NumTriangles * 3, 1, submesh.FirstTriangle * 3, submesh.BaseVertex, 0);
+	}
 	cl->SetStencilReference(0);
 
 	// Gizmos.
@@ -508,27 +569,30 @@ int DxRenderer::DummyRender(float dt) {
 		cl->SetGraphics32BitConstants(OutlineRsMvp, OutlineCb{_camera.ViewProj * m, outlineColor});
 
 		cl->SetStencilReference(1);
-		cl->DrawIndexed(submesh.NumTriangles * 3, 1, submesh.FirstTriangle * 3, submesh.BaseVertex, 0);
+		for (int i = 0; i < _sceneMesh.SingleMeshes.size(); i++) {
+			auto submesh = _sceneMesh.SingleMeshes[i].Submesh;
+			cl->DrawIndexed(submesh.NumTriangles * 3, 1, submesh.FirstTriangle * 3, submesh.BaseVertex, 0);
+		}
 	}
 
 	// Present
+	// BarrierBatcher(cl)
+	// .Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+	// .Transition(_windowRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	//
+	// cl->SetRenderTarget(_windowRenderTarget);
+	// cl->SetViewport(_windowViewport);
+	//
+	// cl->SetPipelineState(*_presentPipeline.Pipeline);
+	// cl->SetGraphicsRootSignature(*_presentPipeline.RootSignature);
+	//
+	// cl->SetGraphics32BitConstants(PresentRsTonemap, _tonemap);
+	// cl->SetGraphics32BitConstants(PresentRsPresent, PresentCb{0, 0.f});
+	// cl->SetGraphicsDescriptorTable(PresentRsTex, _hdrColorTextureSrv);
+	// cl->DrawFullscreenTriangle();
+
 	BarrierBatcher(cl)
-	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-	.Transition(_windowRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-	cl->SetRenderTarget(_windowRenderTarget);
-	cl->SetViewport(_windowViewport);
-
-	cl->SetPipelineState(*_presentPipeline.Pipeline);
-	cl->SetGraphicsRootSignature(*_presentPipeline.RootSignature);
-
-	cl->SetGraphics32BitConstants(PresentRsTonemap, _tonemap);
-	cl->SetGraphics32BitConstants(PresentRsPresent, PresentCb{0, 0.f});
-	cl->SetGraphicsDescriptorTable(PresentRsTex, _hdrColorTextureSrv);
-	cl->DrawFullscreenTriangle();
-
-	BarrierBatcher(cl)
-	.Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON)
+	// .Transition(_hdrColorTexture.Resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COMMON)
 	.Transition(_windowRenderTarget.ColorAttachments[0], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
 
 	_windowRenderTarget.ColorAttachments[0].Reset();

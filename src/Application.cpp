@@ -4,6 +4,7 @@
 #include "directx/DxCommandList.h"
 #include "directx/DxContext.h"
 #include "directx/DxRenderer.h"
+#include <iostream>
 
 Application* Application::_instance = new Application{};
 
@@ -102,6 +103,7 @@ bool Application::NewFrame() {
 	if (ButtonDownEffect(_input, EButton_esc) and not(IsDown(_input, EButton_ctrl) || IsDown(_input, EButton_shift))) {
 		result = false;
 	}
+
 	return result;
 }
 
@@ -223,9 +225,9 @@ bool Application::HandleWindowsMessages() {
 	}
 
 	_input.Mouse.RelX = (float)_input.Mouse.X / (_mainWindow.ClientWidth - 1);
-	_input.Mouse.RelY = (float)_input.Mouse.X / (_mainWindow.ClientHeight - 1);
+	_input.Mouse.RelY = (float)_input.Mouse.Y / (_mainWindow.ClientHeight - 1);
 	_input.Mouse.Dx = _input.Mouse.X - oldMouseX;
-	_input.Mouse.Dy = _input.Mouse.X - oldMouseY;
+	_input.Mouse.Dy = _input.Mouse.Y - oldMouseY;
 	_input.Mouse.RelDx = _input.Mouse.RelX - oldMouseRelX;
 	_input.Mouse.RelDy = _input.Mouse.RelY - oldMouseRelY;
 
@@ -301,6 +303,7 @@ void Application::Run() {
 		const CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = _mainWindow.Rtv();
 		const DxResource backBuffer = _mainWindow.GetCurrentBackBuffer();
 
+		renderer->HandleInput(_input, _timer.DeltaTime());
 		renderer->BeginFrame(rtv, backBuffer);
 		fenceValues[_mainWindow.CurrentBackBufferIndex()] = renderer->DummyRender(_timer.DeltaTime());
 
