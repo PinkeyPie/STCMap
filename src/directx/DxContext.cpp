@@ -112,9 +112,10 @@ void DxContext::Initialize() {
 	ComputeQueue.Initialize(_device);
 	CopyQueue.Initialize(_device);
 
-	_rtvAllocator = DxRtvDescriptorHeap::CreateRTVDescriptorAllocator(1024);
-	_dsvAllocator = DxDsvDescriptorHeap::CreateDSVDescriptorAllocator(1024);
-	_frameDescriptorAllocator.SetDevice(_device);
+	_descriptorAllocatorCPU.Initialize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4096, false);
+	_descriptorAllocatorGPU.Initialize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
+	_rtvAllocator.Initialize(1024, false);
+	_dsvAllocator.Initialize(1024, false);
 }
 
 void DxContext::FlushApplication() {
@@ -136,12 +137,16 @@ DxCommandList* DxContext::AllocateCommandList(D3D12_COMMAND_LIST_TYPE type) {
 	auto result = static_cast<DxCommandList*>(_arena.Allocate(sizeof(DxCommandList), true));
 	_allocationMutex.unlock();
 
+	new(result)DxCommandList();
+
 	result->Type = type;
 
 	DxCommandAllocator* allocator = GetFreeCommandAllocator(type);
 	result->_commandAllocator = allocator;
 
 	ThrowIfFailed(_device->CreateCommandList(0, type, allocator->CommandAllocator.Get(), nullptr, IID_PPV_ARGS(result->_commandList.GetAddressOf())))
+
+	result->_dynamicDescriptorHeap.Initialize();
 
 	return result;
 }

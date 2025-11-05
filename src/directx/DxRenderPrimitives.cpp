@@ -1,24 +1,83 @@
 #include "DxRenderPrimitives.h"
 #include "DxContext.h"
 
-DxRootSignature CreateRootSignature(DxBlob rootSignatureBlob) {
-	DxContext& dxContext = DxContext::Instance();
-	DxRootSignature rootSignature;
-
-	ThrowIfFailed(dxContext.GetDevice()->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
-		rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(rootSignature.GetAddressOf())));
-
-	return rootSignature;
+namespace {
 }
 
-DxRootSignature CreateRootSignature(const wchar* path) {
+void DxRootSignature::CopyRootSignatureDesc(const D3D12_ROOT_SIGNATURE_DESC *desc) {
+	uint32 numDescriptorTables = 0;
+	for (uint32 i = 0; i < desc->NumParameters; i++) {
+		if (desc->pParameters[i].ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE) {
+			numDescriptorTables++;
+			SetBit(_tableRootParameterMask, i);
+		}
+	}
+
+	_descriptorTableSizes = new uint32[numDescriptorTables];
+	_numDescriptorTables = numDescriptorTables;
+
+	uint32 index = 0;
+	for (uint32 i = 0; i < desc->NumParameters; i++) {
+		if (desc->pParameters[i].ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE) {
+			uint32 numRanges = desc->pParameters[i].DescriptorTable.NumDescriptorRanges;
+			_descriptorTableSizes[index] = 0;
+			for (uint32 r = 0; r < numRanges; r++) {
+				_descriptorTableSizes[index] += desc->pParameters[i].DescriptorTable.pDescriptorRanges[r].NumDescriptors;
+			}
+			index++;
+		}
+	}
+}
+
+void DxRootSignature::CopyRootSignatureDesc(const D3D12_ROOT_SIGNATURE_DESC1 *desc) {
+	uint32 numDescriptorTables = 0;
+	for (uint32 i = 0; i < desc->NumParameters; i++) {
+		if (desc->pParameters[i].ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE) {
+			numDescriptorTables++;
+			SetBit(_tableRootParameterMask, i);
+		}
+	}
+
+	_descriptorTableSizes = new uint32[numDescriptorTables];
+	_numDescriptorTables = numDescriptorTables;
+
+	uint32 index = 0;
+	for (uint32 i = 0; i < desc->NumParameters; i++) {
+		if (desc->pParameters[i].ParameterType == D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE) {
+			uint32 numRanges = desc->pParameters[i].DescriptorTable.NumDescriptorRanges;
+			_descriptorTableSizes[index] = 0;
+			for (uint32 r = 0; r < numRanges; r++) {
+				_descriptorTableSizes[index] += desc->pParameters[i].DescriptorTable.pDescriptorRanges[r].NumDescriptors;
+			}
+			index++;
+		}
+	}
+}
+
+DxRootSignature DxRootSignature::CreateRootSignature(DxBlob rootSignatureBlob) {
+	DxContext& dxContext = DxContext::Instance();
+	DxRootSignature result = {};
+
+	ThrowIfFailed(dxContext.GetDevice()->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
+		rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(result._rootSignature.GetAddressOf())));
+
+	Com<ID3D12RootSignatureDeserializer> deserializer;
+	ThrowIfFailed(D3D12CreateRootSignatureDeserializer(rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(deserializer.GetAddressOf())));
+	D3D12_ROOT_SIGNATURE_DESC* desc = (D3D12_ROOT_SIGNATURE_DESC*)deserializer->GetRootSignatureDesc();
+
+	result.CopyRootSignatureDesc(desc);
+
+	return result;
+}
+
+DxRootSignature DxRootSignature::CreateRootSignature(const wchar* path) {
 	DxBlob rootSignatureBlob;
 	ThrowIfFailed(D3DReadFileToBlob(path, rootSignatureBlob.GetAddressOf()));
 
 	return CreateRootSignature(rootSignatureBlob);
 }
 
-DxRootSignature CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC1& desc) {
+DxRootSignature DxRootSignature::CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC1& desc) {
 	DxContext& dxContext = DxContext::Instance();
 	D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 	featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -33,14 +92,18 @@ DxRootSignature CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC1& desc) {
 	DxBlob errorBlob;
 	ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDescription, featureData.HighestVersion, &rootSignatureBlob, &errorBlob));
 
-	DxRootSignature rootSignature;
+	DxRootSignature rootSignature = {};
 
-	ThrowIfFailed(dxContext.GetDevice()->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(rootSignature.GetAddressOf())));
+	ThrowIfFailed(dxContext.GetDevice()->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
+		rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(rootSignature._rootSignature.GetAddressOf())));
+
+	rootSignature.CopyRootSignatureDesc(&desc);
 
 	return rootSignature;
 }
 
-DxRootSignature CreateRootSignature(CD3DX12_ROOT_PARAMETER1* rootParameters, uint32 numRootParameters, CD3DX12_STATIC_SAMPLER_DESC* samplers, uint32 numSamplers, D3D12_ROOT_SIGNATURE_FLAGS flags) {
+DxRootSignature DxRootSignature::CreateRootSignature(CD3DX12_ROOT_PARAMETER1* rootParameters, uint32 numRootParameters,
+	CD3DX12_STATIC_SAMPLER_DESC* samplers, uint32 numSamplers, D3D12_ROOT_SIGNATURE_FLAGS flags) {
 	D3D12_ROOT_SIGNATURE_DESC1 rootSignatureDesc = {};
 	rootSignatureDesc.Flags = flags;
 	rootSignatureDesc.pParameters = rootParameters;
@@ -50,21 +113,23 @@ DxRootSignature CreateRootSignature(CD3DX12_ROOT_PARAMETER1* rootParameters, uin
 	return CreateRootSignature(rootSignatureDesc);
 }
 
-DxRootSignature CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC& desc) {
+DxRootSignature DxRootSignature::CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC& desc) {
 	DxContext& dxContext = DxContext::Instance();
 	DxBlob rootSignatureBlob;
 	DxBlob errorBlob;
 	ThrowIfFailed(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &rootSignatureBlob, &errorBlob));
 
-	DxRootSignature rootSignature;
+	DxRootSignature rootSignature = {};
 
 	ThrowIfFailed(dxContext.GetDevice()->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(),
-		rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature)));
+		rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature._rootSignature)));
+
+	rootSignature.CopyRootSignatureDesc(&desc);
 
 	return rootSignature;
 }
 
-DxRootSignature CreateRootSignature(CD3DX12_ROOT_PARAMETER* rootParameters, uint32 numRootParameters, CD3DX12_STATIC_SAMPLER_DESC* samplers, uint32 numSamplers, D3D12_ROOT_SIGNATURE_FLAGS flags) {
+DxRootSignature DxRootSignature::CreateRootSignature(CD3DX12_ROOT_PARAMETER* rootParameters, uint32 numRootParameters, CD3DX12_STATIC_SAMPLER_DESC* samplers, uint32 numSamplers, D3D12_ROOT_SIGNATURE_FLAGS flags) {
 	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
 	rootSignatureDesc.Flags = flags;
 	rootSignatureDesc.pParameters = rootParameters;
@@ -78,15 +143,21 @@ DxCommandSignature CreateCommandSignature(DxRootSignature rootSignature, const D
 	DxContext& dxContext = DxContext::Instance();
 	DxCommandSignature commandSignature;
 	ThrowIfFailed(dxContext.GetDevice()->CreateCommandSignature(&commandSignatureDesc,
-		commandSignatureDesc.NumArgumentDescs == 1 ? 0 : rootSignature.Get(),
+		commandSignatureDesc.NumArgumentDescs == 1 ? 0 : rootSignature.RootSignature(),
 		IID_PPV_ARGS(commandSignature.GetAddressOf())));
 	return commandSignature;
 }
 
-DxRootSignature CreateRootSignature(D3D12_ROOT_SIGNATURE_FLAGS flags) {
+DxRootSignature DxRootSignature::CreateRootSignature(D3D12_ROOT_SIGNATURE_FLAGS flags) {
 	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
 	rootSignatureDesc.Flags = flags;
 	return CreateRootSignature(rootSignatureDesc);
+}
+
+void DxRootSignature::Free() {
+	if (_descriptorTableSizes) {
+		delete[] _descriptorTableSizes;
+	}
 }
 
 

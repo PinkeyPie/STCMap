@@ -376,7 +376,7 @@ void DxRenderer::HandleInput(const UserInput &input, float dt) {
 	if (input.Mouse.Right.IsDown) {
 		vec3 cameraInputDir(
 			(input.Keyboard[EButton_d].IsDown ? -1.f : 0.f) + (input.Keyboard[EButton_a].IsDown ? 1.f : 0.f),
-			(input.Keyboard[EButton_e].IsDown ? 1.f : 0.f) + (input.Keyboard[EButton_q].IsDown ? -1.f : 0.f),
+			(input.Keyboard[EButton_e].IsDown ? -1.f : 0.f) + (input.Keyboard[EButton_q].IsDown ? 1.f : 0.f),
 			(input.Keyboard[EButton_w].IsDown ? 1.f : 0.f) + (input.Keyboard[EButton_s].IsDown ? -1.f : 0.f)
 		);
 		cameraInputDir *= (input.Keyboard[EButton_shift].IsDown ? 3.f : 1.f) * (input.Keyboard[EButton_ctrl].IsDown ? 0.1f : 1.f) * cameraMovementSpeed;
@@ -507,7 +507,7 @@ int DxRenderer::DummyRender(float dt) {
 	cl->SetComputeRootSignature(*_worldSpaceFrustumPipeline.RootSignature);
 	cl->SetComputeDynamicConstantBuffer(WorldSpaceTiledFrustumRsCamera, _cameraCBV);
 	cl->SetCompute32BitConstants(WorldSpaceTiledFrustumRsCb, FrustumCb{_lightCullingBuffers.NumTilesX, _lightCullingBuffers.NumTilesY});
-	cl->SetComputeUAV(WorldSpaceTiledFrustumRsFrustumUav, _lightCullingBuffers.TiledFrustum);
+	cl->SetRootComputeUAV(WorldSpaceTiledFrustumRsFrustumUav, _lightCullingBuffers.TiledFrustum);
 	cl->Dispatch(bucketize(_lightCullingBuffers.NumTilesX, 16), bucketize(_lightCullingBuffers.NumTilesY, 16));
 
 	// Light culling

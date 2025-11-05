@@ -50,7 +50,6 @@ using DxSwapChain = Com<IDXGISwapChain4>;
 using DxResource = Com<ID3D12Resource>;
 using DxGraphicsCommandList = Com<ID3D12GraphicsCommandList4>;
 using DxBlob = Com<ID3DBlob>;
-using DxRootSignature = Com<ID3D12RootSignature>;
 using DxPipelineState = Com<ID3D12PipelineState>;
 using DxCommandSignature = Com<ID3D12CommandSignature>;
 using DxHeap = Com<ID3D12Heap>;

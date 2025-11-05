@@ -122,7 +122,7 @@ DxPipeline DxPipelineFactory::CreateReloadablePipeline(const D3D12_GRAPHICS_PIPE
 	PushBlob(files.Ds, &state);
 	PushBlob(files.Hs, &state);
 
-	DxRootSignature* rootSignature = &reloadableRs->RootSignature;
+	DxRootSignature* rootSignature = reloadableRs->RootSignature;
 
 	state.Initialize(desc, files, rootSignature);
 
@@ -157,7 +157,7 @@ DxPipeline DxPipelineFactory::CreateReloadablePipeline(const char *csFile, const
 	ReloadableRootSignature* reloadableRs = PushBlob(rootSignatureFile, &state, true);
 	PushBlob(csFile, &state);
 
-	DxRootSignature* rootSignature = &reloadableRs->RootSignature;
+	DxRootSignature* rootSignature = reloadableRs->RootSignature;
 
 	state.Initialize(csFile, rootSignature);
 
@@ -168,8 +168,9 @@ DxPipeline DxPipelineFactory::CreateReloadablePipeline(const char *csFile, const
 void DxPipelineFactory::LoadRootSignature(ReloadableRootSignature &r) {
 	DxBlob rs = _shaderBlobs[r.File].Blob;
 
-	DxContext::Instance().RetireObject(r.RootSignature);
-	r.RootSignature = CreateRootSignature(rs);
+	DxContext::Instance().RetireObject(r.RootSignature->RootSignature());
+	r.RootSignature->Free();
+	*r.RootSignature = DxRootSignature::CreateRootSignature(rs);
 }
 
 void DxPipelineFactory::LoadPipeline(ReloadablePipelineState& p) {
@@ -198,14 +199,14 @@ void DxPipelineFactory::LoadPipeline(ReloadablePipelineState& p) {
 			p.GraphicsDesc.HS = CD3DX12_SHADER_BYTECODE(shader.Get());
 		}
 
-		p.GraphicsDesc.pRootSignature = p.RootSignature->Get();
+		p.GraphicsDesc.pRootSignature = p.RootSignature->RootSignature();
 		ThrowIfFailed(dxContext.GetDevice()->CreateGraphicsPipelineState(&p.GraphicsDesc, IID_PPV_ARGS(p.Pipeline.GetAddressOf())));
 	}
 	else {
 		DxBlob shader = _shaderBlobs[p.ComputeFile].Blob;
 		p.ComputeDesc.CS = CD3DX12_SHADER_BYTECODE(shader.Get());
 
-		p.ComputeDesc.pRootSignature = p.RootSignature->Get();
+		p.ComputeDesc.pRootSignature = p.RootSignature->RootSignature();
 		ThrowIfFailed(dxContext.GetDevice()->CreateComputePipelineState(&p.ComputeDesc, IID_PPV_ARGS(p.Pipeline.GetAddressOf())));
 	}
 }

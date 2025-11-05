@@ -1,8 +1,9 @@
 #pragma once
 
 #include "../directx/dx.h"
-#include "DxDescriptorHeap.h"
 #include "DxContext.h"
+#include "DxDescriptor.h"
+
 
 // If the TextureLoadFlags flags is set, the system will cache the texture as DDS to disk for faster loading next time.
 // This is not done if the original file has a newer write time.
@@ -31,10 +32,14 @@ public:
 
 	D3D12_FEATURE_DATA_FORMAT_SUPPORT FormatSupport;
 
-	DxDescriptorHandle RTVHandles;
-	DxDescriptorHandle DSVHandle;
+	DxCpuDescriptorHandle RTVHandles;
+	DxCpuDescriptorHandle DSVHandle;
+
+	DxCpuDescriptorHandle DefaultSRV;
+	DxCpuDescriptorHandle DefaultUAV;
 
 	void Resize(uint32 newWidth, uint32 newHeight, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
+	void Free();
 
 	static DxTexture Create(D3D12_RESOURCE_DESC textureDesc, D3D12_SUBRESOURCE_DATA* subresourceData, uint32 numSubresources, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
 	static DxTexture Create(const void* data, uint32 width, uint32 height, DXGI_FORMAT format, bool allowRenderTarget = false, bool allowUnorderedAccess = false, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
@@ -49,14 +54,6 @@ public:
 private:
 	void UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, uint32 firstSubresource, uint32 numSubresources);
 	void Update(const char* filename, uint32 flags);
-
-	DxDescriptorHandle Create2DTextureSRV(DxDevice device, DxDescriptorHandle index, TextureMipRange mipRange = {}, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN) const;
-	DxDescriptorHandle CreateCubemapSRV(DxDevice device, DxDescriptorHandle index, TextureMipRange mipRange = {}, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN) const;
-	DxDescriptorHandle CreateCubemapArraySRV(DxDevice device, DxDescriptorHandle index, TextureMipRange mipRange = {}, uint32 firstCube = 0, uint32 numCubes = 1, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN) const;
-	DxDescriptorHandle CreateDepthTextureSRV(DxDevice device, DxDescriptorHandle index) const;
-	static DxDescriptorHandle CreateNullSRV(DxDevice device, DxDescriptorHandle index);
-	DxDescriptorHandle Create2DTextureUAV(DxDevice device, DxDescriptorHandle index, uint32 mipSlice = 0, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN) const;
-	DxDescriptorHandle Create2DTextureArrayUAV(DxDevice device, DxDescriptorHandle index, uint32 mipSlice = 0, DXGI_FORMAT overrideFormat = DXGI_FORMAT_UNKNOWN) const;
 
 	friend DxDescriptorRange;
 };

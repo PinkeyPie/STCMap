@@ -154,8 +154,10 @@ void TexturePreprocessor::GenerateMipMapsOnGPU(DxCommandList *cl, DxTexture &tex
 
     DxDescriptorRange descriptors = dxContext.FrameDescriptorAllocator().AllocateContiguousDescriptorRange(numDescriptors);
 
-    DxDescriptorHandle srvOffset;
+    DxDoubleDescriptorHandle srvOffset;
     for (uint32 i = 0; i < numSrcMipLevels; i++) {
+        DxDoubleDescriptorHandle handle = descriptors.PushHandle();
+        handle.Create@
         DxDescriptorHandle h = descriptors.Push2DTextureSRV(tmpTexture, {i, 1}, overrideFormat);
         if (i == 0) {
             srvOffset = h;

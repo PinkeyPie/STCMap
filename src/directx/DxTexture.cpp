@@ -251,7 +251,7 @@ DxTexture DxTexture::LoadFromFile(const char *filename, uint32 flags) {
 
 DxTexture DxTexture::Create(D3D12_RESOURCE_DESC textureDesc, D3D12_SUBRESOURCE_DATA* subresourceData, uint32 numSubresources, D3D12_RESOURCE_STATES initialState) {
 	DxContext& dxContext = DxContext::Instance();
-	DxTexture result;
+	DxTexture result = {};
 
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	ThrowIfFailed(dxContext.GetDevice()->CreateCommittedResource(
@@ -276,6 +276,22 @@ DxTexture DxTexture::Create(D3D12_RESOURCE_DESC textureDesc, D3D12_SUBRESOURCE_D
 
 	if (subresourceData) {
 		result.UploadSubresourceData(subresourceData, 0, numSubresources);
+	}
+
+	if (textureDesc.DepthOrArraySize == 6) {
+		result.DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapArraySRV(result);
+	}
+	else {
+		result.DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureSRV(result);
+	}
+
+	if (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
+		if (textureDesc.DepthOrArraySize == 6) {
+			result.DefaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapUAV(result);
+		}
+		else {
+			result.DefaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureUAV(result);
+		}
 	}
 
 	return result;
@@ -303,7 +319,7 @@ DxTexture DxTexture::Create(const void* data, uint32 width, uint32 height, DXGI_
 
 DxTexture DxTexture::CreateDepth(uint32 width, uint32 height, DXGI_FORMAT format) {
 	DxContext& dxContext = DxContext::Instance();
-	DxTexture result;
+	DxTexture result = {};
 
 	D3D12_CLEAR_VALUE optimizedClearValue = {};
 	optimizedClearValue.Format = format;
@@ -331,6 +347,7 @@ DxTexture DxTexture::CreateDepth(uint32 width, uint32 height, DXGI_FORMAT format
 	));
 
 	result.DSVHandle = dxContext.PushDepthStencilView(&result);
+	result.DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateDepthTextureSRV(result);
 
 	return result;
 }
@@ -372,8 +389,39 @@ void DxTexture::Resize(uint32 newWidth, uint32 newHeight, D3D12_RESOURCE_STATES 
 
 	if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
 		dxContext.CreateDepthStencilView(this, DSVHandle);
+		DefaultSRV.CreateDepthTextureSRV(this);
+	}
+	else {
+		if (desc.DepthOrArraySize == 6) {
+			DefaultSRV.CreateCubemapSRV(this);
+		}
+		else {
+			DefaultSRV.Create2DTextureSRV(this);
+		}
+	}
+
+	if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
+		if (desc.DepthOrArraySize == 6) {
+			DefaultUAV.CreateCubemapUAV(this);
+		}
+		else {
+			DefaultUAV.Create2DTextureUAV(this);
+		}
 	}
 }
+
+void DxTexture::Free() {
+	DxContext& context = DxContext::Instance();
+	if (DefaultSRV.CpuHandle.ptr) {
+		context.DescriptorAllocatorCPU().FreeHandle(DefaultSRV);
+	}
+	if (DefaultUAV.CpuHandle.ptr) {
+		context.DescriptorAllocatorCPU().FreeHandle(DefaultUAV);
+	}
+}
+
+
+
 
 bool DxTexture::FormatSupportsRTV() const {
 	return CheckFormatSupport(FormatSupport, D3D12_FORMAT_SUPPORT1_RENDER_TARGET);
@@ -392,91 +440,3 @@ bool DxTexture::FormatSupportsUAV() const {
 		CheckFormatSupport(FormatSupport, D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD) and
 		CheckFormatSupport(FormatSupport, D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE);
 }
-
-DxDescriptorHandle DxTexture::Create2DTextureSRV(DxDevice device, DxDescriptorHandle index, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) const {
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? Resource->GetDesc().Format : overrideFormat;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MostDetailedMip = mipRange.First;
-	srvDesc.Texture2D.MipLevels = mipRange.Count;
-
-	device->CreateShaderResourceView(Resource.Get(), &srvDesc, index.CpuHandle);
-
-	return index;
-}
-
-DxDescriptorHandle DxTexture::CreateCubemapSRV(DxDevice device, DxDescriptorHandle index, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) const {
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? Resource->GetDesc().Format : overrideFormat;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-	srvDesc.TextureCube.MostDetailedMip = mipRange.First;
-	srvDesc.TextureCube.MipLevels = mipRange.Count;
-
-	device->CreateShaderResourceView(Resource.Get(), &srvDesc, index.CpuHandle);
-
-	return index;
-}
-
-DxDescriptorHandle DxTexture::CreateCubemapArraySRV(DxDevice device, DxDescriptorHandle index, TextureMipRange mipRange, uint32 firstCube, uint32 numCubes, DXGI_FORMAT overrideFormat) const {
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? Resource->GetDesc().Format : overrideFormat;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
-	srvDesc.TextureCubeArray.MostDetailedMip = mipRange.First;
-	srvDesc.TextureCubeArray.MipLevels = mipRange.Count;
-	srvDesc.TextureCubeArray.NumCubes = numCubes;
-	srvDesc.TextureCubeArray.First2DArrayFace = firstCube * 6;
-
-	device->CreateShaderResourceView(Resource.Get(), &srvDesc, index.CpuHandle);
-
-	return index;
-}
-
-DxDescriptorHandle DxTexture::CreateDepthTextureSRV(DxDevice device, DxDescriptorHandle index) const {
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = GetReadFormatFromTypeless(Resource->GetDesc().Format);
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Texture2D.MipLevels = 1;
-
-	device->CreateShaderResourceView(Resource.Get(), &srvDesc, index.CpuHandle);
-
-	return index;
-}
-
-DxDescriptorHandle DxTexture::CreateNullSRV(DxDevice device, DxDescriptorHandle index) {
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Texture2D.MipLevels = 0;
-
-	device->CreateShaderResourceView(nullptr, &srvDesc, index.CpuHandle);
-
-	return index;
-}
-
-DxDescriptorHandle DxTexture::Create2DTextureUAV(DxDevice device, DxDescriptorHandle index, uint32 mipSlice, DXGI_FORMAT overrideFormat) const {
-	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-	uavDesc.Format = overrideFormat;
-	uavDesc.Texture2D.MipSlice = mipSlice;
-	device->CreateUnorderedAccessView(Resource.Get(), nullptr, &uavDesc, index.CpuHandle);
-
-	return index;
-}
-
-DxDescriptorHandle DxTexture::Create2DTextureArrayUAV(DxDevice device, DxDescriptorHandle index, uint32 mipSlice, DXGI_FORMAT overrideFormat) const {
-	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-	uavDesc.Format = overrideFormat;
-	uavDesc.Texture2DArray.FirstArraySlice = 0;
-	uavDesc.Texture2DArray.ArraySize = Resource->GetDesc().DepthOrArraySize;
-	uavDesc.Texture2DArray.MipSlice = mipSlice;
-	device->CreateUnorderedAccessView(Resource.Get(), nullptr, &uavDesc, index.CpuHandle);
-
-	return index;
-}
-

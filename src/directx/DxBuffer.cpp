@@ -79,13 +79,15 @@ void DxBuffer::UpdateDataRange(const void* data, uint32 offset, uint32 size) {
 	dxContext.ExecuteCommandList(commandList);
 }
 
-void DxBuffer::Initialize(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType) {
+void DxBuffer::Initialize(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing,
+	D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType) {
 	DxContext& dxContext = DxContext::Instance();
 	D3D12_RESOURCE_FLAGS flags = allowUnorderedAccess ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
 
 	ElementSize = elementSize;
 	ElementCount = elementCount;
 	TotalSize = elementSize * elementCount;
+	HeapType = heapType;
 
 	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(heapType);
 	const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(TotalSize, flags);
@@ -109,33 +111,42 @@ void DxBuffer::Initialize(uint32 elementSize, uint32 elementCount, void* data, b
 			Unmap();
 		}
 	}
+
+	DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferSRV(this);
+	if (allowUnorderedAccess) {
+		DefaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferUAV(this);
+	}
+	if (allowClearing) {
+		CpuClearUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferSRV(this);
+		DxCpuDescriptorHandle shaderVisibleCpuHandle = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferUintUAV(this);
+		GpuClearUAV = dxContext.DescriptorAllocatorGPU().GetMatchingGpuHandle(shaderVisibleCpuHandle);
+	}
 }
 
-
-DxBuffer DxBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState) {
+DxBuffer DxBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing, D3D12_RESOURCE_STATES initialState) {
 	DxBuffer result;
-	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, initialState, D3D12_HEAP_TYPE_DEFAULT);
+	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, allowClearing, initialState, D3D12_HEAP_TYPE_DEFAULT);
 	return result;
 }
 
-DxBuffer DxBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
+DxBuffer DxBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data) {
 	DxBuffer result;
-	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
+	result.Initialize(elementSize, elementCount, data, false, false, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
 	return result;
 }
 
-DxVertexBuffer DxVertexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
+DxVertexBuffer DxVertexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing) {
 	DxVertexBuffer result;
-	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess);
+	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, allowClearing);
 	result.View.BufferLocation = result.GpuVirtualAddress;
 	result.View.SizeInBytes = result.TotalSize;
 	result.View.StrideInBytes = elementSize;
 	return result;
 }
 
-DxVertexBuffer DxVertexBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
+DxVertexBuffer DxVertexBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data) {
 	DxVertexBuffer result;
-	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
+	result.Initialize(elementSize, elementCount, data, false, false, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
 	result.View.BufferLocation = result.GpuVirtualAddress;
 	result.View.SizeInBytes = result.TotalSize;
 	result.View.StrideInBytes = elementSize;
@@ -156,96 +167,53 @@ DXGI_FORMAT DxIndexBuffer::GetIndexBufferFormat(uint32 elementSize) {
 	return result;
 }
 
-DxIndexBuffer DxIndexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess) {
+DxIndexBuffer DxIndexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing) {
 	DxIndexBuffer result;
-	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess);
+	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, allowClearing);
 	result.View.BufferLocation = result.GpuVirtualAddress;
 	result.View.SizeInBytes = result.TotalSize;
 	result.View.Format = GetIndexBufferFormat(elementSize);
 	return result;
 }
 
-DxDescriptorHandle DxBuffer::CreateSRV(DxDevice device, DxDescriptorHandle index, BufferRange bufferRange) const {
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-	srvDesc.Buffer.FirstElement = bufferRange.FirstElement;
-	srvDesc.Buffer.NumElements = (bufferRange.NumElements != -1) ? bufferRange.NumElements : (ElementCount - bufferRange.FirstElement);
-	srvDesc.Buffer.StructureByteStride = ElementSize;
-	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+void DxBuffer::Resize(uint32 newElementCount, D3D12_RESOURCE_STATES initialState) {
+	DxContext& context = DxContext::Instance();
+	ElementCount = newElementCount;
+	TotalSize = ElementCount * ElementSize;
 
-	device->CreateShaderResourceView(Resource.Get(), &srvDesc, index.CpuHandle);
+	auto desc = Resource->GetDesc();
 
-	return index;
+	CD3DX12_HEAP_PROPERTIES heapProperties(HeapType);
+	CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(TotalSize, desc.Flags);
+	ThrowIfFailed(context.GetDevice()->CreateCommittedResource(
+		&heapProperties,
+		D3D12_HEAP_FLAG_NONE,
+		&resourceDesc,
+		initialState,
+		nullptr,
+		IID_PPV_ARGS(Resource.GetAddressOf())
+	));
+	GpuVirtualAddress = Resource->GetGPUVirtualAddress();
+
+	DefaultSRV.CreateBufferSRV(this);
+	if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
+		DefaultUAV.CreateBufferUAV(this);
+	}
+	if (CpuClearUAV.CpuHandle.ptr) {
+		CpuClearUAV.CreateBufferUintUAV(this);
+		DxCpuDescriptorHandle shaderVisibleCPUHandle = context.DescriptorAllocatorCPU().GetMatchingCpuHandle(GpuClearUAV);
+		shaderVisibleCPUHandle.CreateBufferUintUAV(this);
+	}
 }
 
-DxDescriptorHandle DxBuffer::CreateRawSRV(DxDevice device, DxDescriptorHandle index, BufferRange bufferRange) {
-	uint32 firstElementByteOffset = bufferRange.FirstElement * ElementSize;
-	assert(firstElementByteOffset % 16 == 0);
-
-	uint32 count = (bufferRange.NumElements != -1) ? bufferRange.NumElements : (ElementCount - bufferRange.FirstElement);
-	uint32 totalSize = count * ElementSize;
-
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-	srvDesc.Buffer.FirstElement = firstElementByteOffset / 4;
-	srvDesc.Buffer.NumElements = totalSize / 4;
-	srvDesc.Buffer.StructureByteStride = 0;
-	srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
-
-	device->CreateShaderResourceView(Resource.Get(), &srvDesc, index.CpuHandle);
-
-	return index;
-}
-
-DxDescriptorHandle DxBuffer::CreateUAV(DxDevice device, DxDescriptorHandle index, BufferRange bufferRange) const {
-	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-	uavDesc.Buffer.CounterOffsetInBytes = 0;
-	uavDesc.Buffer.FirstElement = bufferRange.FirstElement;
-	uavDesc.Buffer.NumElements = (bufferRange.NumElements != -1) ? bufferRange.NumElements : (ElementCount - bufferRange.FirstElement);
-	uavDesc.Buffer.StructureByteStride = ElementSize;
-	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
-
-	device->CreateUnorderedAccessView(Resource.Get(), nullptr, &uavDesc, index.CpuHandle);
-
-	return index;
-}
-
-DxDescriptorHandle DxBuffer::CreateBufferUintUAV(DxDevice device, DxBuffer &buffer, DxDescriptorHandle index, BufferRange bufferRange) {
-	uint32 firstElementByteOffset = bufferRange.FirstElement * ElementSize;
-	assert(firstElementByteOffset % 16 == 0);
-
-	uint32 count = (bufferRange.NumElements != -1) ? bufferRange.NumElements : (buffer.ElementCount - bufferRange.FirstElement);
-	uint32 totalSize = count* ElementSize;
-
-	D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	uavDesc.Format = DXGI_FORMAT_R32_UINT;
-	uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-	uavDesc.Buffer.CounterOffsetInBytes = 0;
-	uavDesc.Buffer.FirstElement = firstElementByteOffset / 4;
-	uavDesc.Buffer.NumElements = totalSize / 4;
-	uavDesc.Buffer.StructureByteStride = 0;
-	uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
-
-	device->CreateUnorderedAccessView(buffer.Resource.Get(), 0, &uavDesc, index.CpuHandle);
-
-	return index;
-}
-
-
-DxDescriptorHandle DxBuffer::CreateRaytracingAccelerationStructureSRV(DxDevice device, DxDescriptorHandle index) const {
-	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	srvDesc.RaytracingAccelerationStructure.Location = GpuVirtualAddress;
-
-	device->CreateShaderResourceView(nullptr, &srvDesc, index.CpuHandle);
-
-	return index;
+void DxBuffer::Free(DxBuffer &buffer) {
+	DxContext& context = DxContext::Instance();
+	if (DefaultSRV.CpuHandle.ptr) {
+		context.DescriptorAllocatorCPU().FreeHandle(DefaultSRV);
+	}
+	if (DefaultUAV.CpuHandle.ptr) {
+		context.DescriptorAllocatorCPU().FreeHandle(DefaultUAV);
+	}
 }
 
 DxSubmesh DxSubmesh::Create(DxMesh& mesh, SubmeshInfo info) {

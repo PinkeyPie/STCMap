@@ -6,6 +6,7 @@
 #include "dx.h"
 #include "DxCommandList.h"
 #include "DxCommandQueue.h"
+#include "DxDescriptorAllocation.h"
 #include "../core/threading.h"
 #include "../core/memory.h"
 #include "DxUploadBuffer.h"
@@ -31,18 +32,22 @@ public:
 	void FlushApplication();
 	bool IsRunning() const { return _running; }
 
-	DxDescriptorHandle PushRenderTargetView(DxTexture* renderTarget) {
+	DxCpuDescriptorHandle PushRenderTargetView(DxTexture* renderTarget) {
 		return _rtvAllocator.PushRenderTargetView(renderTarget);
 	}
-	DxDescriptorHandle PushDepthStencilView(DxTexture* depthBuffer) {
+	DxCpuDescriptorHandle PushDepthStencilView(DxTexture* depthBuffer) {
 		return _dsvAllocator.PushDepthStencilView(depthBuffer);
 	}
-	void CreateRenderTargetView(DxTexture* renderTarget, DxDescriptorHandle handle) {
+	void CreateRenderTargetView(DxTexture* renderTarget, DxCpuDescriptorHandle handle) {
 		_rtvAllocator.CreateRenderTargetView(renderTarget, handle);
 	}
-	void CreateDepthStencilView(DxTexture* depthBuffer, DxDescriptorHandle handle) {
+	void CreateDepthStencilView(DxTexture* depthBuffer, DxCpuDescriptorHandle handle) {
 		_dsvAllocator.CreateDepthStencilView(depthBuffer, handle);
 	}
+	const DxDescriptorHeap& DescriptorAllocatorCPU() const { return _descriptorAllocatorCPU; }
+	DxDescriptorHeap& DescriptorAllocatorCPU() { return _descriptorAllocatorCPU; }
+	const DxDescriptorHeap& DescriptorAllocatorGPU() const { return _descriptorAllocatorGPU; }
+	DxDescriptorHeap& DescriptorAllocatorGPU() { return _descriptorAllocatorGPU; }
 
 	void RetireObject(DxObject object);
 
@@ -83,15 +88,15 @@ private:
 	DxCommandList* AllocateCommandList(D3D12_COMMAND_LIST_TYPE type);
 	DxCommandAllocator* AllocateCommandAllocator(D3D12_COMMAND_LIST_TYPE type);
 
-	void InitializeBuffer(DxBuffer& buffer, uint32 elementSize, uint32 elementCount, void* data = 0, bool allowUnorderedAccess = false);
-	void InitializeDescriptorHeap(DxDescriptorHeap& descriptorHeap, D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors, bool shaderVisible = true);
-
 	uint64 _frameId = 0;
 	uint32 _bufferFrameId = 0;
 
 	DxFactory _factory = {};
 	DxAdapter _adapter = {};
 	DxDevice _device = {};
+
+	DxDescriptorHeap _descriptorAllocatorCPU;
+	DxDescriptorHeap _descriptorAllocatorGPU;
 
 	std::mutex _allocationMutex = {};
 	MemoryArena _arena;

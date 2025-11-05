@@ -28,5 +28,8 @@ using wchar = wchar_t;
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
+#define SetBit(mask, bit) mask |= (1 << (bit))
+#define UnsetBit(mask, bit) mask ^= (1 << (bit))
+
 #include <string>
 #include <vector>

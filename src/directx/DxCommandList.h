@@ -4,6 +4,9 @@
 #include "DxUploadBuffer.h"
 #include "../pch.h"
 #include "DxTexture.h"
+#include "DxDynamicDescriptorHeap.h"
+#include "DxRenderPrimitives.h"
+
 
 class DxRenderTarget;
 
@@ -42,12 +45,12 @@ public:
 	void SetPipelineState(DxRaytracingPipelineState pipelineState);
 
 	// Uniforms.
-	void SetGraphicsRootSignature(DxRootSignature rootSignature);
+	void SetGraphicsRootSignature(const DxRootSignature& rootSignature);
 	void SetGraphics32BitConstants(uint32 rootParameterIndex, uint32 numConstants, const void* constants);
 	template<typename T>
 	void SetGraphics32BitConstants(uint32 rootParameterIndex, const T& constants);
 
-	void SetComputeRootSignature(DxRootSignature rootSignature);
+	void SetComputeRootSignature(const DxRootSignature& rootSignature);
 	void SetCompute32BitConstants(uint32 rootParameterIndex, uint32 numConstants, const void* constants);
 	template<typename T>
 	void SetCompute32BitConstants(uint32 rootParameterIndex, const T& constants);
@@ -72,24 +75,31 @@ public:
 
 	DxDynamicVertexBuffer CreateDynamicVertexBuffer(uint32 elementSize, uint32 elementCount, void* data);
 
-	void SetGraphicsUAV(uint32 rootParameterIndex, DxBuffer& buffer);
-	void SetGraphicsUAV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetComputeUAV(uint32 rootParameterIndex, DxBuffer& buffer);
-	void SetComputeUAV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetRootGraphicsUAV(uint32 rootParameterIndex, DxBuffer& buffer);
+	void SetRootGraphicsUAV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetRootComputeUAV(uint32 rootParameterIndex, DxBuffer& buffer);
+	void SetRootComputeUAV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
 
-	void SetGraphicsSRV(uint32 rootParameterIndex, DxBuffer& buffer);
-	void SetGraphicsSRV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
-	void SetComputeSRV(uint32 rootParameterIndex, DxBuffer& buffer);
-	void SetComputeSRV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetRootGraphicsSRV(uint32 rootParameterIndex, DxBuffer& buffer);
+	void SetRootGraphicsSRV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+	void SetRootComputeSRV(uint32 rootParameterIndex, DxBuffer& buffer);
+	void SetRootComputeSRV(uint32 rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS address);
+
+	void SetDescriptorHeapResource(uint32 rootParameterIndex, uint32 offset, uint32 count, DxCpuDescriptorHandle handle);
+	void SetDescriptorHeapSRV(uint32 rootParameterIndex, uint32 offset, DxTexture& texture) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, texture.DefaultSRV); }
+	void SetDescriptorHeapSRV(uint32 rootParameterIndex, uint32 offset, DxBuffer& buffer) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, buffer.DefaultSRV); }
+	void SetDescriptorHeapUAV(uint32 rootParameterIndex, uint32 offset, DxTexture& texture) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, texture.DefaultUAV); }
+	void SetDescriptorHeapUAV(uint32 rootParameterIndex, uint32 offset, DxBuffer& buffer) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, buffer.DefaultUAV); }
 
 	// Shader resources.
 	void SetDescriptorHeap(DxDescriptorHeap& descriptorHeap);
 	void SetDescriptorHeap(DxDescriptorRange& descriptorRange);
+	void SetDescriptorHeap(D3D12_DESCRIPTOR_HEAP_TYPE type, ID3D12DescriptorHeap* descriptorHeap);
+	void ResetToDynamicDescriptorHeap();
 	void SetGraphicsDescriptorTable(uint32 rootParameterIndex, CD3DX12_GPU_DESCRIPTOR_HANDLE handle);
-	void SetGraphicsDescriptorTable(uint32 rootParameterIndex, DxDescriptorHandle handle);
 	void SetComputeDescriptorTable(uint32 rootParameterIndex, CD3DX12_GPU_DESCRIPTOR_HANDLE handle);
-	void SetComputeDescriptorTable(uint32 rootParameterIndex, DxDescriptorHandle handle);
 
+	void ClearUAV(DxBuffer& buffer, float val = 0.f);
 	void ClearUAV(DxResource resource, CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle, CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle, float val = 0.f);
 	void ClearUAV(DxResource resource, CD3DX12_CPU_DESCRIPTOR_HANDLE cpuHandle, CD3DX12_GPU_DESCRIPTOR_HANDLE gpuHandle, uint32 val = 0);
 
@@ -138,7 +148,10 @@ private:
 	ID3D12DescriptorHeap* _descriptorHeaps[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
 	DxCommandAllocator* _commandAllocator = nullptr;
 	DxGraphicsCommandList _commandList = nullptr;
+
 	DxUploadBuffer _uploadBuffer;
+	DxDynamicDescriptorHeap _dynamicDescriptorHeap;
+
 	DxCommandList* _next;
 	uint64 _usedLastOnFrame;
 

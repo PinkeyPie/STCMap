@@ -37,8 +37,8 @@ public:
 		return result;
 	}
 
-	DxGraphicsPipelineGenerator& RootSignature(DxRootSignature rootSignature) {
-		Desc.pRootSignature = rootSignature.Get();
+	DxGraphicsPipelineGenerator& RootSignature(const DxRootSignature& rootSignature) {
+		Desc.pRootSignature = rootSignature.RootSignature();
 		return *this;
 	}
 
@@ -214,8 +214,8 @@ public:
 		return result;
 	}
 
-	DxComputePipelineGenerator& RootSignature(DxRootSignature rootSignature) {
-		Desc.pRootSignature = rootSignature.Get();
+	DxComputePipelineGenerator& RootSignature(const DxRootSignature& rootSignature) {
+		Desc.pRootSignature = rootSignature.RootSignature();
 		return *this;
 	}
 
@@ -291,7 +291,7 @@ private:
 
 	struct ReloadableRootSignature {
 		const char* File;
-		DxRootSignature RootSignature;
+		DxRootSignature* RootSignature;
 	};
 
 	struct ShaderFile {
