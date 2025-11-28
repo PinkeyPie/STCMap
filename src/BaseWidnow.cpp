@@ -103,7 +103,7 @@ LRESULT BaseWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-bool BaseWindow::Initialize(const TCHAR* name, int initialWidth, int initialHeight) {
+bool BaseWindow::Initialize(const TCHAR* name, int initialWidth, int initialHeight, ColorDepth colorDepth) {
 	ClientWidth = initialWidth;
 	ClientHeight = initialHeight;
 	return Create(name, WS_OVERLAPPEDWINDOW);

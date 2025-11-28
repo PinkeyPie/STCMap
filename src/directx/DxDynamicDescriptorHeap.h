@@ -4,6 +4,8 @@
 #include "dx.h"
 #include <deque>
 
+#include "DxDescriptor.h"
+
 class DxCommandList;
 class DxRootSignature;
 
@@ -11,7 +13,7 @@ class DxDynamicDescriptorHeap {
 public:
     void Initialize(uint32 numDescriptorsPerHeap = 1024);
 
-    void StageDescriptors(uint32 rootParameterIndex, uint32 offset, uint32 numDescriptors, D3D12_CPU_DESCRIPTOR_HANDLE srcDescriptor);
+    void StageDescriptors(uint32 rootParameterIndex, uint32 offset, uint32 numDescriptors, DxCpuDescriptorHandle srcDescriptor);
 
     void CommitStagedDescriptorsForDraw(DxCommandList* commandList);
     void CommitStagedDescriptorsForDispatch(DxCommandList* commandList);
@@ -59,8 +61,8 @@ private:
     std::vector<Com<ID3D12DescriptorHeap>> _freeDescriptorHeaps;
 
     Com<ID3D12DescriptorHeap> _currentDescriptorHeap;
-    CD3DX12_CPU_DESCRIPTOR_HANDLE _currentCpuDescriptorHandle;
-    CD3DX12_GPU_DESCRIPTOR_HANDLE _currentGpuDescriptorHandle;
+    DxCpuDescriptorHandle _currentCpuDescriptorHandle;
+    DxGpuDescriptorHandle _currentGpuDescriptorHandle;
 
     uint32 _numFreeHandles;
 };

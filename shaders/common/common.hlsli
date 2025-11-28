@@ -13,6 +13,8 @@
 #define mat2 float2x2
 #define mat3 float3x3
 #define mat4 float4x4
+#define Min(a, b) ((a) < (b) ? (a) : (b))
+#define Max(a, b) ((a) < (b) ? (b) : (a))
 #else
 #include "../core/math.h"
 #endif

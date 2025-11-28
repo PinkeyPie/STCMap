@@ -3,10 +3,9 @@
 //
 
 #include "DxDynamicDescriptorHeap.h"
-#include "DxDynamicDescriptorHeap.h"
 #include "DxCommandList.h"
-#include "DxRenderPrimitives.h"
 #include "DxContext.h"
+#include "DxPipeline.h"
 
 void DxDynamicDescriptorHeap::Initialize(uint32 numDescriptorsPerHeap) {
     _numDescriptorsPerHeap = numDescriptorsPerHeap;
@@ -16,14 +15,10 @@ void DxDynamicDescriptorHeap::Initialize(uint32 numDescriptorsPerHeap) {
     _currentGpuDescriptorHandle = D3D12_DEFAULT;
     _numFreeHandles = 0;
 
-    _descriptorHandleIncrementSize = DxContext::Instance().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
     _descriptorHandleCache.resize(_numDescriptorsPerHeap);
 }
 
-
-
-void DxDynamicDescriptorHeap::StageDescriptors(uint32 rootParameterIndex, uint32 offset, uint32 numDescriptors, D3D12_CPU_DESCRIPTOR_HANDLE srcDescriptor) {
+void DxDynamicDescriptorHeap::StageDescriptors(uint32 rootParameterIndex, uint32 offset, uint32 numDescriptors, DxCpuDescriptorHandle srcDescriptor) {
     assert(numDescriptors <= _numDescriptorsPerHeap and rootParameterIndex < maxDescriptorTables);
 
     DescriptorTableCache& cache = _descriptorTableCache[rootParameterIndex];
@@ -32,7 +27,7 @@ void DxDynamicDescriptorHeap::StageDescriptors(uint32 rootParameterIndex, uint32
 
     D3D12_CPU_DESCRIPTOR_HANDLE* dstDescriptor = (cache.BaseDescriptor + offset);
     for (uint32 i = 0; i < numDescriptors; i++) {
-        dstDescriptor[i] = CD3DX12_CPU_DESCRIPTOR_HANDLE(srcDescriptor, i, _descriptorHandleIncrementSize);
+        dstDescriptor[i] = srcDescriptor + i;
     }
 
     SetBit(_staleDescriptorTableBitMask, rootParameterIndex);
@@ -73,8 +68,8 @@ void DxDynamicDescriptorHeap::CommitStagedDescriptors(DxCommandList *commandList
                 commandList->SetComputeDescriptorTable(rootIndex, _currentGpuDescriptorHandle);
             }
 
-            _currentCpuDescriptorHandle.Offset(numSrcDescriptors, _descriptorHandleIncrementSize);
-            _currentGpuDescriptorHandle.Offset(numSrcDescriptors, _descriptorHandleIncrementSize);
+            _currentCpuDescriptorHandle += numSrcDescriptors;
+            _currentGpuDescriptorHandle += numSrcDescriptors;
             _numFreeHandles -= numSrcDescriptors;
 
             UnsetBit(_staleDescriptorTableBitMask, rootIndex);
@@ -98,7 +93,6 @@ void DxDynamicDescriptorHeap::ParseRootSignature(const DxRootSignature &rootSign
     _staleDescriptorTableBitMask = 0;
 
     _descriptorTableBitMask = rootSignature.TableRootParameterMask();
-    uint32 numDescriptorTables = rootSignature.NumDescriptorTables();
 
     uint32 bitmask = _descriptorTableBitMask;
     uint32 currentOffset = 0;

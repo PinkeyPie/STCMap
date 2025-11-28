@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../pch.h"
 #include "dx.h"
 #include "DxDescriptor.h"
 
@@ -16,21 +15,28 @@ struct DxDynamicVertexBuffer {
 	D3D12_VERTEX_BUFFER_VIEW View;
 };
 
-struct BufferRange {
+struct MapRange {
 	uint32 FirstElement = 0;
 	uint32 NumElements = (uint32)-1;
 };
 
 class DxBuffer {
 public:
-	DxResource Resource;
+	virtual ~DxBuffer();
 
-	uint32 ElementSize;
-	uint32 ElementCount;
-	uint32 TotalSize;
-	D3D12_HEAP_TYPE HeapType;
+	DxResource Resource = nullptr;
+
+	uint32 ElementSize = 0;
+	uint32 ElementCount = 0;
+	uint32 TotalSize = 0;
+	D3D12_HEAP_TYPE HeapType = D3D12_HEAP_TYPE_UPLOAD;
 
 	D3D12_GPU_VIRTUAL_ADDRESS GpuVirtualAddress;
+
+	bool SupportsUAV;
+	bool SupportsSRV;
+	bool SupportsClearing;
+	bool Raytracing;
 
 	DxCpuDescriptorHandle DefaultSRV;
 	DxCpuDescriptorHandle DefaultUAV;
@@ -38,19 +44,24 @@ public:
 	DxCpuDescriptorHandle CpuClearUAV;
 	DxGpuDescriptorHandle GpuClearUAV;
 
-	void* Map();
-	void Unmap();
+	DxCpuDescriptorHandle RaytracingSRV;
 
-	void Upload(const void* bufferData);
+	void* Map(bool intentsReading, MapRange readRange = {});
+	void Unmap(bool hasWritten, MapRange writenRange = {});
+
+	void UploadData(const void* bufferData);
 	void UpdateDataRange(const void* data, uint32 offset, uint32 size);
+	void UpdateUploadData(void* data, uint32 size);
 	void Resize(uint32 newElementCount, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
-	void Free(DxBuffer& buffer);
 
-	static DxBuffer Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false, bool allowClearing = false, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
-	static DxBuffer CreateUpload(uint32 elementSize, uint32 elementCount, void* data);
+	static Ptr<DxBuffer> Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false, bool allowClearing = false, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
+	static Ptr<DxBuffer> CreateUpload(uint32 elementSize, uint32 elementCount, void* data);
+	static Ptr<DxBuffer> CreateRaytracingTLASBuffer(uint32 size);
+	static Ptr<DxBuffer> CreateReadback(uint32 elementSize, uint32 elementCount, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COPY_DEST);
 
 protected:
-	void Initialize(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON, D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT);
+	void Initialize(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing, bool raytracing = false,
+		D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON, D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_DEFAULT);
 
 	friend class DxDescriptorRange;
 };
@@ -58,39 +69,38 @@ protected:
 class DxVertexBuffer : public DxBuffer {
 public:
 	D3D12_VERTEX_BUFFER_VIEW View;
-	static DxVertexBuffer Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false, bool allowClearing = false);
-	static DxVertexBuffer CreateUpload(uint32 elementSize, uint32 elementCount, void* data);
+	static Ptr<DxVertexBuffer> Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false, bool allowClearing = false);
+	static Ptr<DxVertexBuffer> CreateUpload(uint32 elementSize, uint32 elementCount, void* data);
 };
 
 class DxIndexBuffer : public DxBuffer {
 public:
 	D3D12_INDEX_BUFFER_VIEW View;
-	static DxIndexBuffer Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false, bool allowClearing = false);
+	static Ptr<DxIndexBuffer> Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess = false, bool allowClearing = false);
 	static DXGI_FORMAT GetIndexBufferFormat(uint32 elementSize);
 };
 
 class DxMesh {
 public:
-	DxVertexBuffer VertexBuffer;
-	DxIndexBuffer IndexBuffer;
+	Ptr<DxVertexBuffer> VertexBuffer;
+	Ptr<DxIndexBuffer> IndexBuffer;
 };
 
-class SubmeshInfo {
-public:
-	uint32 NumTriangles;
-	uint32 FirstTriangle;
-	uint32 BaseVertex;
-	uint32 NumVertices;
-};
+struct BufferGrave {
+	DxResource Resource;
 
-class DxSubmesh {
-public:
-	DxVertexBuffer VertexBuffer;
-	DxIndexBuffer IndexBuffer;
-	uint32 NumTriangles;
-	uint32 FirstTriangle;
-	uint32 BaseVertex;
+	DxCpuDescriptorHandle Srv;
+	DxCpuDescriptorHandle Uav;
+	DxCpuDescriptorHandle Clear;
+	DxCpuDescriptorHandle GpuClear;
+	DxCpuDescriptorHandle Raytracing;
 
-	static DxSubmesh Create(DxMesh& mesh, SubmeshInfo info);
-	static DxSubmesh Create(DxMesh& mesh);
+	BufferGrave() {};
+	BufferGrave(const BufferGrave&) = delete;
+	BufferGrave(BufferGrave&&) = default;
+
+	BufferGrave& operator=(const BufferGrave&) = delete;
+	BufferGrave& operator=(BufferGrave&&) = default;
+
+	~BufferGrave();
 };

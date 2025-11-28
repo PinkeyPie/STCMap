@@ -13,30 +13,21 @@
 static uint32 AlignTo(uint32 currentOffset, uint32 alignment) {
 	uint32 mask = alignment - 1;
 	uint32 misalignment = currentOffset & mask;
-	if (misalignment == 0) {
-		return currentOffset;
-	}
-	uint32 adjustment = alignment - misalignment;
+	uint32 adjustment = (misalignment == 0) ? 0 : alignment - misalignment;
 	return currentOffset + adjustment;
 }
 
 static uint64 AlignTo(uint64 currentOffset, uint64 alignment) {
 	uint64 mask = alignment - 1;
 	uint64 misalignment = currentOffset & mask;
-	if (misalignment == 0) {
-		return currentOffset;
-	}
-	uint64 adjustment = alignment - misalignment;
+	uint64 adjustment = (misalignment == 0) ? 0 : alignment - misalignment;
 	return currentOffset + adjustment;
 }
 
 static void* AlignTo(void* currentAddress, uint64 alignment) {
 	uint64 mask = alignment - 1;
 	uint64 misalignment = (uint64)currentAddress & mask;
-	if (misalignment == 0) {
-		return currentAddress;
-	}
-	uint64 adjustment = alignment - misalignment;
+	uint64 adjustment = (misalignment == 0) ? 0 : alignment - misalignment;
 	return (uint8*)currentAddress + adjustment;
 }
 

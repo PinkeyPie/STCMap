@@ -25,7 +25,7 @@ cbuffer GenerateMipsCb : register(b0)
     uint SrcMipLevel; // Texture level of source mip
     uint NumMipLevels; // Shader can generate up to 4 mips at once
     uint SrcDimensionFlags; // Flags indicating if the source width/height are even/odd
-    uint IsSRGB; // Is the source texture in sRGB color space
+    bool IsSRGB; // Is the source texture in sRGB color space
     float2 TexelSize; // 1.0 / DstMip1.Dimensions
 }
 
@@ -39,7 +39,7 @@ RWTexture2D<float4> DstMip3 : register(u2);
 RWTexture2D<float4> DstMip4 : register(u3);
 
 // Linear clamp sampler
-SamplerState LinearSampler : register(s0);
+SamplerState LinearClampSampler : register(s0);
 
 // The rason for separating channels into groupshared memory is to reduce bank conflicts
 // in the local data memory controller. A large stride will cause more threads
@@ -64,12 +64,12 @@ float4 LoadColorFromSharedMemory(uint index)
 
 float3 SRGBToLinear(float3 c)
 {
-    return c < 0.04045f ? c * (1.0f / 12.92f) : pow((c + 0.055f) * (1.0f / 1.055f), 2.4f);
+    return c.r < 0.04045f && c.g < 0.04045f && c.b < 0.04045f ? c * (1.0f / 12.92f) : pow((c + 0.055f) * (1.0f / 1.055f), 2.4f);
 }
 
 float3 LinearToSRGB(float3 c)
 {
-    return c <= 0.0031308f ? c * 12.92f : 1.055f * pow(c, 1.0f / 2.4f) - 0.055f;
+    return c.r <= 0.0031308f && c.g <= 0.0031308f && c.b <= 0.0031308f ? c * 12.92f : 1.055f * pow(c, 1.0f / 2.4f) - 0.055f;
 }
 
 float4 PackColor(float4 c) 
@@ -89,105 +89,109 @@ float4 PackColor(float4 c)
 void main(CsInput input) 
 {
     float4 src1 = (float4)0;
-    
-    switch(SrcDimensionFlags) 
-    {
-        case WIDTH_HEIGHT_EVEN:
-        {
-            float2 uv = TexelSize * (input.DispatchThreadId.xy + 0.5f);
-            src1 = SrcTexture.SampleLevel(LinearSampler, uv, SrcMipLevel);
-            break;
-        }
-        case WIDTH_ODD_HEIGHT_EVEN:
-        {
-            // > 2:1 in X dimesion
-            // Use 2 bilinear samles to guarantee we don't undersample when downsizing by more than 2x horizontally
-            float2 uv1 = TexelSize * (input.DispatchThreadId.xy + float2(0.25f, 0.5f));
-            float2 off = TexelSize * float2(0.5f, 0.f);
 
-            src1 = 0.5f * (SrcTexture.SampleLevel(LinearSampler, uv1, SrcMipLevel) + SrcTexture.SampleLevel(LinearSampler, uv1 + off, SrcMipLevel));
-            break;
-        }
-        case WIDTH_EVEN_HEIGHT_ODD: 
-        {
-            // > 2:1 in Y dimesion
-            // Use 2 bilinear samples to guarantee we don't undersample when downsizing by more than 2x horizontally
-            float2 uv1 = TexelSize * (input.DispatchThreadId.xy + float2(0.25f, 0.5f));
-            float2 off = TexelSize * float2(0.5f, 0.f);
+	switch (SrcDimensionFlags)
+	{
+	case WIDTH_HEIGHT_EVEN:
+	{
+		float2 uv = TexelSize * (input.DispatchThreadId.xy + 0.5f);
+		src1 = SrcTexture.SampleLevel(LinearClampSampler, uv, SrcMipLevel);
+	} break;
 
-            src1 = 0.5f * (SrcTexture.SampleLevel(LinearSampler, uv1, SrcMipLevel) + SrcTexture.SampleLevel(LinearSampler, uv1 + off, SrcMipLevel));
-            break;
-        }
-        case WIDTH_HEIGHT_ODD: 
-        {
-            // > 2:1 in both dimensions
-            // Use 4 bilinear samples to guarantee we don't undersample when downsizing by more than 2x
-            // in both directions
-            float2 uv1 = TexelSize * (input.DispatchThreadId.xy + float2(0.25f, 0.25f));
-            float2 off = TexelSize * 0.5f;
+	case WIDTH_ODD_HEIGHT_EVEN:
+	{
+		// > 2:1 in X dimension
+		// Use 2 bilinear samples to guarantee we don't undersample when downsizing by more than 2x
+		// horizontally.
+		float2 uv1 = TexelSize * (input.DispatchThreadId.xy + float2(0.25f, 0.5f));
+		float2 off = TexelSize * float2(0.5f, 0.f);
 
-            src1 = SrcTexture.SampleLevel(LinearSampler, uv1, SrcMipLevel);
-            src1 += SrcTexture.SampleLevel(LinearSampler, uv1 + float2(off.x, 0.f), SrcMipLevel);
-            src1 += SrcTexture.SampleLevel(LinearSampler, uv1 + float2(0.f, off.y), SrcMipLevel);
-            src1 += SrcTexture.SampleLevel(LinearSampler, uv1 + float2(off.x, off.y), SrcMipLevel);
-            break;
-        }
-    }
+		src1 = 0.5f * (SrcTexture.SampleLevel(LinearClampSampler, uv1, SrcMipLevel) +
+			SrcTexture.SampleLevel(LinearClampSampler, uv1 + off, SrcMipLevel));
+	} break;
 
-    DstMip1[input.DispatchThreadId.xy] = PackColor(src1);
+	case WIDTH_EVEN_HEIGHT_ODD:
+	{
+		// > 2:1 in Y dimension
+		// Use 2 bilinear samples to guarantee we don't undersample when downsizing by more than 2x
+		// vertically.
+		float2 uv1 = TexelSize * (input.DispatchThreadId.xy + float2(0.5f, 0.25f));
+		float2 off = TexelSize * float2(0.f, 0.5f);
 
-    if(NumMipLevels == 1) 
-    {
-        return;
-    }
+		src1 = 0.5f * (SrcTexture.SampleLevel(LinearClampSampler, uv1, SrcMipLevel) +
+			SrcTexture.SampleLevel(LinearClampSampler, uv1 + off, SrcMipLevel));
+	} break;
 
-    StoreColorToSharedMemory(input.GroupIndex, src1);
+	case WIDTH_HEIGHT_ODD:
+	{
+		// > 2:1 in in both dimensions
+		// Use 4 bilinear samples to guarantee we don't undersample when downsizing by more than 2x
+		// in both directions.
+		float2 uv1 = TexelSize * (input.DispatchThreadId.xy + float2(0.25f, 0.25f));
+		float2 off = TexelSize * 0.5f;
 
-    GroupMemoryBarrierWithGroupSync();
+		src1 = SrcTexture.SampleLevel(LinearClampSampler, uv1, SrcMipLevel);
+		src1 += SrcTexture.SampleLevel(LinearClampSampler, uv1 + float2(off.x, 0.0), SrcMipLevel);
+		src1 += SrcTexture.SampleLevel(LinearClampSampler, uv1 + float2(0.0, off.y), SrcMipLevel);
+		src1 += SrcTexture.SampleLevel(LinearClampSampler, uv1 + float2(off.x, off.y), SrcMipLevel);
+		src1 *= 0.25;
+	} break;
+	}
 
-    if((input.GroupIndex & 0x9) == 0)
-    {
-        float4 src2 = LoadColorFromSharedMemory(input.GroupIndex + 0x01);
-        float4 src3 = LoadColorFromSharedMemory(input.GroupIndex + 0x08);
-        float4 src4 = LoadColorFromSharedMemory(input.GroupIndex + 0x09);
-        src1 = 0.25f * (src1 + src2 + src3 + src4);
+	DstMip1[input.DispatchThreadId.xy] = PackColor(src1);
 
-        DstMip2[input.DispatchThreadId.xy / 2] = PackColor(src1);
-        StoreColorToSharedMemory(input.GroupIndex, src1);
-    }
+	if (NumMipLevels == 1)
+	{
+		return;
+	}
 
-    if(NumMipLevels == 2) 
-    {
-        return;
-    }
+	StoreColorToSharedMemory(input.GroupIndex, src1);
 
-    GroupMemoryBarrierWithGroupSync();
+	GroupMemoryBarrierWithGroupSync();
 
-    if((input.GroupIndex & 0x18) == 0)
-    {
-        float4 src2 = LoadColorFromSharedMemory(input.GroupIndex + 0x02);
-        float4 src3 = LoadColorFromSharedMemory(input.GroupIndex + 0x10);
-        float4 src4 = LoadColorFromSharedMemory(input.GroupIndex + 0x12);
-        src1 = 0.25f + (src1 + src2 + src3 + src4);
+	if ((input.GroupIndex & 0x9) == 0)
+	{
+		float4 src2 = LoadColorFromSharedMemory(input.GroupIndex + 0x01);
+		float4 src3 = LoadColorFromSharedMemory(input.GroupIndex + 0x08);
+		float4 src4 = LoadColorFromSharedMemory(input.GroupIndex + 0x09);
+		src1 = 0.25f * (src1 + src2 + src3 + src4);
 
-        DstMip3[input.DispatchThreadId.xy / 4] = PackColor(src1);
-        StoreColorToSharedMemory(input.GroupIndex, src1);
-    }
+		DstMip2[input.DispatchThreadId.xy / 2] = PackColor(src1);
+		StoreColorToSharedMemory(input.GroupIndex, src1);
+	}
 
-    if(NumMipLevels == 3) 
-    {
-        return;
-    }
+	if (NumMipLevels == 2)
+	{
+		return;
+	}
 
-    GroupMemoryBarrierWithGroupSync();
-    
-    if(input.GroupIndex == 0)
-    {
-        float4 src2 = LoadColorFromSharedMemory(input.GroupIndex + 0x04);
-        float4 src3 = LoadColorFromSharedMemory(input.GroupIndex + 0x20);
-        float4 src4 = LoadColorFromSharedMemory(input.GroupIndex + 0x24);
-        src1 = 0.25f * (src1 * src2 * src3 * src4);
+	GroupMemoryBarrierWithGroupSync();
 
-        DstMip4[input.DispatchThreadId.xy / 8] = PackColor(src1);
-    }
+	if ((input.GroupIndex & 0x1B) == 0)
+	{
+		float4 src2 = LoadColorFromSharedMemory(input.GroupIndex + 0x02);
+		float4 src3 = LoadColorFromSharedMemory(input.GroupIndex + 0x10);
+		float4 src4 = LoadColorFromSharedMemory(input.GroupIndex + 0x12);
+		src1 = 0.25f * (src1 + src2 + src3 + src4);
+
+		DstMip3[input.DispatchThreadId.xy / 4] = PackColor(src1);
+		StoreColorToSharedMemory(input.GroupIndex, src1);
+	}
+
+	if (NumMipLevels == 3)
+	{
+		return;
+	}
+
+	GroupMemoryBarrierWithGroupSync();
+
+	if (input.GroupIndex == 0)
+	{
+		float4 src2 = LoadColorFromSharedMemory(input.GroupIndex + 0x04);
+		float4 src3 = LoadColorFromSharedMemory(input.GroupIndex + 0x20);
+		float4 src4 = LoadColorFromSharedMemory(input.GroupIndex + 0x24);
+		src1 = 0.25f * (src1 + src2 + src3 + src4);
+
+		DstMip4[input.DispatchThreadId.xy / 8] = PackColor(src1);
+	}
 }

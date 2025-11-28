@@ -5,9 +5,20 @@
 #include <d3dcompiler.h>
 #include <wrl.h>
 #include <comdef.h>
+#include <sdkddkver.h>
 
-template<class T>
-using Com = Microsoft::WRL::ComPtr<T>;
+// The newer SDK brings new APIs (e.g. mesh shaders), which can be enabled with this switch.
+// You should still design your program with lower capabilities in mind and switch on certain
+// features at runtime.
+// For example, wrap all your mesh shader code in a runtime if. The dx_context exposes the actual
+// hardware capabilities.
+#if defined(TURING_GPU_OR_NEWER_AVAILABLE) && defined(WINDOWS_SDK_19041_OR_NEWER_AVAILABLE) && defined(NTDDI_WIN10_19H1) && (WDK_NTDDI_VERSION >= NTDDI_WIN10_19H1)
+#define ADVANCED_GPU_FEATURES_ENABLED 1
+#else
+#define ADVANCED_GPU_FEATURES_ENABLED 0
+#endif
+
+template<class T> using Com = Microsoft::WRL::ComPtr<T>;
 
 inline std::wstring AnsiToWString(const std::string& str) {
     WCHAR buffer[MAX_PATH];
@@ -48,16 +59,25 @@ using DxDevice = Com<ID3D12Device5>;
 using DxFactory = Com<IDXGIFactory4>;
 using DxSwapChain = Com<IDXGISwapChain4>;
 using DxResource = Com<ID3D12Resource>;
-using DxGraphicsCommandList = Com<ID3D12GraphicsCommandList4>;
+using DxCommandAllocator = Com<ID3D12CommandAllocator>;
 using DxBlob = Com<ID3DBlob>;
 using DxPipelineState = Com<ID3D12PipelineState>;
 using DxCommandSignature = Com<ID3D12CommandSignature>;
 using DxHeap = Com<ID3D12Heap>;
 using DxRaytracingPipelineState = Com<ID3D12StateObject>;
+using DxQueryHeap = Com<ID3D12QueryHeap>;
+
+#if ADVANCED_GPU_FEATURES_ENABLED
+using DxGraphicsCommandList = Com<ID3D12GraphicsCommandList6>;
+#else
+using DxGraphicsCommandList = Com<ID3D12GraphicsCommandList4>;
+#endif
 
 #define NUM_BUFFERED_FRAMES 2
 
-#define SetName(obj, name) ThrowIfFailed(obj->SetName(L##name))
+#define ENABLE_DX_PROFILING 0
+
+#define SET_NAME(obj, name) ThrowIfFailed(obj->SetName(L##name))
 
 enum ColorDepth {
 	EColorDepth8,

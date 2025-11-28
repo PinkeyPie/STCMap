@@ -1,122 +1,5 @@
 #include "DxDescriptorAllocation.h"
-#include "DxTexture.h"
-#include "DxBuffer.h"
-#include "DxRenderPrimitives.h"
-
-
-void DxDescriptorHeap::Initialize(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32 numDescriptors, bool shaderVisible) {
-    DxContext& dxContext = DxContext::Instance();
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.NumDescriptors = numDescriptors;
-    desc.Type = type;
-    if (shaderVisible) {
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    }
-
-    ThrowIfFailed(dxContext.GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&_descriptorHeap)));
-
-    _allFreeIncludingAndAfter = 0;
-    _descriptorHandleIncrementSize = dxContext.GetDevice()->GetDescriptorHandleIncrementSize(type);
-    _cpuBase = _descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-    _gpuBase = _descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-    Type = type;
-}
-
-DxCpuDescriptorHandle DxDescriptorHeap::GetFreeHandle() {
-    uint32 index;
-    if (!_freeDescriptors.empty()) {
-        index = _freeDescriptors.back();
-        _freeDescriptors.pop_back();
-    }
-    else {
-        index = _allFreeIncludingAndAfter++;
-    }
-    return { CD3DX12_CPU_DESCRIPTOR_HANDLE(_cpuBase, index, _descriptorHandleIncrementSize)};
-}
-
-void DxDescriptorHeap::FreeHandle(DxCpuDescriptorHandle handle) {
-    uint32 index = (uint32)((handle.CpuHandle.ptr - _cpuBase.ptr) / _descriptorHandleIncrementSize);
-    _freeDescriptors.push_back(index);
-}
-
-DxCpuDescriptorHandle DxDescriptorHeap::GetMatchingCpuHandle(DxGpuDescriptorHandle handle) {
-    uint32 offset = (uint32)(handle.GpuHandle.ptr - _gpuBase.ptr);
-    return { CD3DX12_CPU_DESCRIPTOR_HANDLE(_cpuBase, offset)};
-}
-
-DxGpuDescriptorHandle DxDescriptorHeap::GetMatchingGpuHandle(DxCpuDescriptorHandle handle) {
-    uint32 offset = (uint32)(handle.CpuHandle.ptr - _cpuBase.ptr);
-    return {CD3DX12_GPU_DESCRIPTOR_HANDLE(_gpuBase, offset)};
-}
-
-void DxRtvDescriptorHeap::Initialize(uint32 numDescriptors, bool shaderVisible) {
-    _pushIndex = 0;
-    DxDescriptorHeap::Initialize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV, numDescriptors, shaderVisible);
-}
-
-DxCpuDescriptorHandle DxRtvDescriptorHeap::PushRenderTargetView(DxTexture *texture) {
-    D3D12_RESOURCE_DESC resourceDesc = texture->Resource->GetDesc();
-    assert(resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
-    uint32 slices = resourceDesc.DepthOrArraySize;
-
-    uint32 index = AtomicAdd(_pushIndex, slices);
-    DxCpuDescriptorHandle result = GetHandle(index);
-    return CreateRenderTargetView(texture, result);
-}
-
-DxCpuDescriptorHandle DxRtvDescriptorHeap::CreateRenderTargetView(DxTexture *texture, DxCpuDescriptorHandle index) {
-    D3D12_RESOURCE_DESC resourceDesc = texture->Resource->GetDesc();
-    assert(resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
-    uint32 slices = resourceDesc.DepthOrArraySize;
-
-    if (slices > 1) {
-        D3D12_RENDER_TARGET_VIEW_DESC rtvDesc;
-        rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-        rtvDesc.Format = resourceDesc.Format;
-        rtvDesc.Texture2DArray.ArraySize = 1;
-        rtvDesc.Texture2DArray.MipSlice = 0;
-        rtvDesc.Texture2DArray.PlaneSlice = 0;
-
-        for (uint32 i = 0; i < slices; i++) {
-            rtvDesc.Texture2DArray.FirstArraySlice = i;
-            CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(index.CpuHandle, i, _descriptorHandleIncrementSize);
-            GetDevice(_descriptorHeap)->CreateRenderTargetView(texture->Resource.Get(), &rtvDesc, rtv);
-        }
-    }
-    else {
-        GetDevice(_descriptorHeap)->CreateRenderTargetView(texture->Resource.Get(), nullptr, index.CpuHandle);
-    }
-
-    return index;
-}
-
-void DxDsvDescriptorHeap::Initialize(uint32 numDescriptors, bool shaderVisible) {
-    _pushIndex = 0;
-    DxDescriptorHeap::Initialize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV, numDescriptors, shaderVisible);
-}
-
-DxCpuDescriptorHandle DxDsvDescriptorHeap::PushDepthStencilView(DxTexture *texture) {
-    D3D12_RESOURCE_DESC resourceDesc = texture->Resource->GetDesc();
-    assert(resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-    uint32 slices = resourceDesc.DepthOrArraySize;
-
-    uint32 index = AtomicAdd(_pushIndex, slices);
-    DxCpuDescriptorHandle result = GetHandle(index);
-    return CreateDepthStencilView(texture, result);
-}
-
-DxCpuDescriptorHandle DxDsvDescriptorHeap::CreateDepthStencilView(DxTexture *texture, DxCpuDescriptorHandle index) {
-    DXGI_FORMAT format = texture->FormatSupport.Format;
-
-    assert(IsDepthFormat(format));
-
-    D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-    dsvDesc.Format = format;
-    dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-    GetDevice(_descriptorHeap)->CreateDepthStencilView(texture->Resource.Get(), &dsvDesc, index.CpuHandle);
-
-    return index;
-}
+#include "DxContext.h"
 
 DxDescriptorPage::DxDescriptorPage(uint32 maxNumDescriptors) : _maxNumDescriptors(maxNumDescriptors) {}
 
@@ -156,9 +39,8 @@ void DxFrameDescriptorAllocator::NewFrame(uint32 bufferedFrameId) {
 
     _currentFrame = bufferedFrameId;
     while (not _usedPages[_currentFrame].empty()) {
-        DxDescriptorPage* page = _usedPages[_currentFrame].top();
+        _freePages.push(std::move(_usedPages[_currentFrame].top()));
         _usedPages[_currentFrame].pop();
-        _freePages.push(page);
     }
 
     _mutex.unlock();
@@ -169,23 +51,23 @@ DxDescriptorRange DxFrameDescriptorAllocator::AllocateContiguousDescriptorRange(
 
     DxDescriptorPage* current = nullptr;
     if (not _usedPages[_currentFrame].empty()) {
-        current = _usedPages[_currentFrame].top();
+        current = _usedPages[_currentFrame].top().get();
     }
 
     if (not current or not current->HaveEnoughSpace(count)) {
-        DxDescriptorPage* freePage = nullptr;
+        std::unique_ptr<DxDescriptorPage> freePage = nullptr;
         if (not _freePages.empty()) {
-            freePage = _freePages.top();
+            freePage = std::move(_freePages.top());
             _freePages.pop();
         }
         if (not freePage) {
-            freePage = new DxDescriptorPage{1024};
-            freePage->Init(_device.Get());
+            freePage = std::make_unique<DxDescriptorPage>(1024);
+            freePage->Init(DxContext::Instance().GetDevice());
         }
 
         freePage->Reset();
-        _usedPages[_currentFrame].push(freePage);
-        current = freePage;
+        current = freePage.get();
+        _usedPages[_currentFrame].push(std::move(freePage));
     }
 
     DxDescriptorRange result = current->GetRange(count);
@@ -193,4 +75,31 @@ DxDescriptorRange DxFrameDescriptorAllocator::AllocateContiguousDescriptorRange(
     _mutex.unlock();
 
     return result;
+}
+
+void DxPushableResourceDescriptorHeap::Inititalize(uint32 maxSize, bool shaderVisible) {
+    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+    desc.NumDescriptors = maxSize;
+    desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    if (shaderVisible) {
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    }
+
+    ThrowIfFailed(DxContext::Instance().GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(DescriptorHeap.GetAddressOf())));
+
+    CurrentCPU = DescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    CurrentGpu = DescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+}
+
+DxCpuDescriptorHandle DxPushableResourceDescriptorHeap::Push() {
+    ++CurrentCPU;
+    return CurrentCPU;
+}
+
+void CreateDescriptorHeap(const D3D12_DESCRIPTOR_HEAP_DESC& desc, Com<ID3D12DescriptorHeap> &heap) {
+    ThrowIfFailed(DxContext::Instance().GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(heap.GetAddressOf())));
+}
+
+uint32 GetIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) {
+    return DxContext::Instance().GetDevice()->GetDescriptorHandleIncrementSize(type);
 }

@@ -1,5 +1,6 @@
 #include "memory.h"
 #include <algorithm>
+#include "math.h"
 
 #ifdef _MSC_VER
 struct Struct {
@@ -20,7 +21,7 @@ namespace {
 }
 
 MemoryBlock* MemoryArena::GetFreeBlock(uint64 size) {
-	size = max(size, MinimumBlockSize);
+	size = Max(size, MinimumBlockSize);
 
 	MemoryBlock* result = nullptr;
 

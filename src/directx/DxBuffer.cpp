@@ -2,17 +2,67 @@
 #include "DxContext.h"
 #include "DxCommandList.h"
 
-void* DxBuffer::Map() {
+namespace {
+	void Retire(DxResource resource, DxCpuDescriptorHandle srv, DxCpuDescriptorHandle uav, DxCpuDescriptorHandle clear, DxGpuDescriptorHandle gpuClear, DxCpuDescriptorHandle raytracing) {
+		DxContext& context = DxContext::Instance();
+		BufferGrave grave;
+		grave.Resource = resource;
+		grave.Srv = srv;
+		grave.Uav = uav;
+		grave.Clear = clear;
+		grave.Raytracing = raytracing;
+		if (gpuClear.GpuHandle.ptr) {
+			grave.GpuClear = context.DescriptorAllocatorGPU().GetMatchingCpuHandle(gpuClear);
+		}
+		else {
+			grave.GpuClear = {};
+		}
+		context.Retire(std::move(grave));
+	}
+}
+
+void* DxBuffer::Map(bool intentsReading, MapRange readRange) {
+	D3D12_RANGE range = { 0, 0 };
+	D3D12_RANGE* r = nullptr;
+
+	if (intentsReading) {
+		if (readRange.NumElements != -1) {
+			range.Begin = readRange.FirstElement * ElementSize;
+			range.End = range.Begin + readRange.NumElements * ElementSize;
+			r = &range;
+		}
+	}
+	else {
+		r = &range;
+	}
 	void* result;
-	Resource->Map(0, nullptr, &result);
+	Resource->Map(0, r, &result);
 	return result;
 }
 
-void DxBuffer::Unmap() {
-	Resource->Unmap(0, nullptr);
+void DxBuffer::Unmap(bool hasWritten, MapRange writtenRange) {
+	D3D12_RANGE range = { 0, 0 };
+	D3D12_RANGE* r = nullptr;
+
+	if (hasWritten) {
+		if (writtenRange.NumElements != -1) {
+			range.Begin = writtenRange.FirstElement * ElementSize;
+			range.End = range.Begin + writtenRange.NumElements * ElementSize;
+		}
+	}
+	else {
+		r = &range;
+	}
+	Resource->Unmap(0, r);
 }
 
-void DxBuffer::Upload(const void* bufferData) {
+void DxBuffer::UpdateUploadData(void *data, uint32 size) {
+	void* mapped = Map(false);
+	memcpy(mapped, data, size);
+	Unmap(true);
+}
+
+void DxBuffer::UploadData(const void* bufferData) {
 	DxContext& dxContext = DxContext::Instance();
 	DxCommandList* commandList = dxContext.GetFreeCopyCommandList();
 
@@ -41,7 +91,7 @@ void DxBuffer::Upload(const void* bufferData) {
 		0, 0, 1, &subresourceData);
 
 	// We are omitting the transition to common here, since the resource automatically decays to common state after being accessed on a copy queue
-	dxContext.RetireObject(intermediateResource);
+	dxContext.Retire(intermediateResource);
 	dxContext.ExecuteCommandList(commandList);
 }
 
@@ -75,12 +125,12 @@ void DxBuffer::UpdateDataRange(const void* data, uint32 offset, uint32 size) {
 
 	// We are omitting the transition to common here, since the resource automatically decays to common state after being accessed on a copy queue.
 
-	dxContext.RetireObject(intermediateResource);
+	dxContext.Retire(intermediateResource);
 	dxContext.ExecuteCommandList(commandList);
 }
 
 void DxBuffer::Initialize(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing,
-	D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType) {
+	bool raytracing, D3D12_RESOURCE_STATES initialState, D3D12_HEAP_TYPE heapType) {
 	DxContext& dxContext = DxContext::Instance();
 	D3D12_RESOURCE_FLAGS flags = allowUnorderedAccess ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
 
@@ -88,6 +138,16 @@ void DxBuffer::Initialize(uint32 elementSize, uint32 elementCount, void* data, b
 	ElementCount = elementCount;
 	TotalSize = elementSize * elementCount;
 	HeapType = heapType;
+	SupportsSRV = heapType != D3D12_HEAP_TYPE_READBACK;
+	SupportsUAV = allowUnorderedAccess;
+	SupportsClearing = allowClearing;
+	Raytracing = raytracing;
+
+	DefaultSRV = {};
+	DefaultUAV = {};
+	CpuClearUAV = {};
+	GpuClearUAV = {};
+	RaytracingSRV = {};
 
 	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(heapType);
 	const auto resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(TotalSize, flags);
@@ -103,53 +163,66 @@ void DxBuffer::Initialize(uint32 elementSize, uint32 elementCount, void* data, b
 
 	if (data) {
 		if (heapType == D3D12_HEAP_TYPE_DEFAULT) {
-			Upload(data);
+			UploadData(data);
 		}
 		else if (heapType == D3D12_HEAP_TYPE_UPLOAD) {
-			void* dataPtr = Map();
+			void* dataPtr = Map(false);
 			memcpy(dataPtr, data, TotalSize);
-			Unmap();
+			Unmap(true);
 		}
 	}
 
-	DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferSRV(this);
-	if (allowUnorderedAccess) {
+	if (SupportsSRV) {
+		DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferSRV(this);
+	}
+	if (SupportsUAV) {
 		DefaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferUAV(this);
 	}
-	if (allowClearing) {
-		CpuClearUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferSRV(this);
-		DxCpuDescriptorHandle shaderVisibleCpuHandle = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferUintUAV(this);
+
+	if (SupportsClearing) {
+		CpuClearUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferUintUAV(this);
+		DxCpuDescriptorHandle shaderVisibleCpuHandle = dxContext.DescriptorAllocatorGPU().GetFreeHandle().CreateBufferUintUAV(this);
 		GpuClearUAV = dxContext.DescriptorAllocatorGPU().GetMatchingGpuHandle(shaderVisibleCpuHandle);
+	}
+
+	if (raytracing) {
+		RaytracingSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateRaytracingAccelerationStructureSRV(this);
 	}
 }
 
-DxBuffer DxBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing, D3D12_RESOURCE_STATES initialState) {
-	DxBuffer result;
-	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, allowClearing, initialState, D3D12_HEAP_TYPE_DEFAULT);
+Ptr<DxBuffer> DxBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing, D3D12_RESOURCE_STATES initialState) {
+	Ptr<DxBuffer> result = MakePtr<DxBuffer>();
+	result->Initialize(elementSize, elementCount, data, allowUnorderedAccess, allowClearing, false, initialState, D3D12_HEAP_TYPE_DEFAULT);
 	return result;
 }
 
-DxBuffer DxBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data) {
-	DxBuffer result;
-	result.Initialize(elementSize, elementCount, data, false, false, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
+Ptr<DxBuffer> DxBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data) {
+	Ptr<DxBuffer> result = MakePtr<DxBuffer>();
+	result->Initialize(elementSize, elementCount, data, false, false, false, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
 	return result;
 }
 
-DxVertexBuffer DxVertexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing) {
-	DxVertexBuffer result;
-	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, allowClearing);
-	result.View.BufferLocation = result.GpuVirtualAddress;
-	result.View.SizeInBytes = result.TotalSize;
-	result.View.StrideInBytes = elementSize;
+Ptr<DxBuffer> DxBuffer::CreateReadback(uint32 elementSize, uint32 elementCount, D3D12_RESOURCE_STATES initialState) {
+	Ptr<DxBuffer> result = MakePtr<DxBuffer>();
+	result->Initialize(elementSize, elementCount, nullptr, false, false, false, initialState, D3D12_HEAP_TYPE_READBACK);
 	return result;
 }
 
-DxVertexBuffer DxVertexBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data) {
-	DxVertexBuffer result;
-	result.Initialize(elementSize, elementCount, data, false, false, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
-	result.View.BufferLocation = result.GpuVirtualAddress;
-	result.View.SizeInBytes = result.TotalSize;
-	result.View.StrideInBytes = elementSize;
+Ptr<DxVertexBuffer> DxVertexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing) {
+	Ptr<DxVertexBuffer> result = MakePtr<DxVertexBuffer>();
+	result->Initialize(elementSize, elementCount, data, allowUnorderedAccess, allowClearing);
+	result->View.BufferLocation = result->GpuVirtualAddress;
+	result->View.SizeInBytes = result->TotalSize;
+	result->View.StrideInBytes = elementSize;
+	return result;
+}
+
+Ptr<DxVertexBuffer> DxVertexBuffer::CreateUpload(uint32 elementSize, uint32 elementCount, void* data) {
+	Ptr<DxVertexBuffer> result = MakePtr<DxVertexBuffer>();
+	result->Initialize(elementSize, elementCount, data, false, false, false, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_HEAP_TYPE_UPLOAD);
+	result->View.BufferLocation = result->GpuVirtualAddress;
+	result->View.SizeInBytes = result->TotalSize;
+	result->View.StrideInBytes = elementSize;
 	return result;
 }
 
@@ -167,17 +240,38 @@ DXGI_FORMAT DxIndexBuffer::GetIndexBufferFormat(uint32 elementSize) {
 	return result;
 }
 
-DxIndexBuffer DxIndexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing) {
-	DxIndexBuffer result;
-	result.Initialize(elementSize, elementCount, data, allowUnorderedAccess, allowClearing);
-	result.View.BufferLocation = result.GpuVirtualAddress;
-	result.View.SizeInBytes = result.TotalSize;
-	result.View.Format = GetIndexBufferFormat(elementSize);
+Ptr<DxIndexBuffer> DxIndexBuffer::Create(uint32 elementSize, uint32 elementCount, void* data, bool allowUnorderedAccess, bool allowClearing) {
+	Ptr<DxIndexBuffer> result = MakePtr<DxIndexBuffer>();
+	result->Initialize(elementSize, elementCount, data, allowUnorderedAccess, allowClearing);
+	result->View.BufferLocation = result->GpuVirtualAddress;
+	result->View.SizeInBytes = result->TotalSize;
+	result->View.Format = GetIndexBufferFormat(elementSize);
 	return result;
+}
+
+Ptr<DxBuffer> DxBuffer::CreateRaytracingTLASBuffer(uint32 size) {
+	Ptr<DxBuffer> result = MakePtr<DxBuffer>();
+	result->Initialize(size, 1, nullptr, true, false, true, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE);
+	return result;
+}
+
+DxBuffer::~DxBuffer() {
+	wchar name[128];
+
+	if (Resource) {
+		uint32 size = sizeof(name);
+		Resource->GetPrivateData(WKPDID_D3DDebugObjectName, &size, name);
+		name[min(arraysize(name) - 1, size)] = 0;
+	}
+
+	Retire(Resource, DefaultSRV, DefaultUAV, CpuClearUAV, GpuClearUAV, RaytracingSRV);
 }
 
 void DxBuffer::Resize(uint32 newElementCount, D3D12_RESOURCE_STATES initialState) {
 	DxContext& context = DxContext::Instance();
+
+	Retire(Resource, DefaultSRV, DefaultUAV, CpuClearUAV, GpuClearUAV, RaytracingSRV);
+
 	ElementCount = newElementCount;
 	TotalSize = ElementCount * ElementSize;
 
@@ -195,43 +289,39 @@ void DxBuffer::Resize(uint32 newElementCount, D3D12_RESOURCE_STATES initialState
 	));
 	GpuVirtualAddress = Resource->GetGPUVirtualAddress();
 
-	DefaultSRV.CreateBufferSRV(this);
-	if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) {
-		DefaultUAV.CreateBufferUAV(this);
+	if (SupportsSRV) {
+		DefaultSRV = context.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferSRV(this);
 	}
-	if (CpuClearUAV.CpuHandle.ptr) {
-		CpuClearUAV.CreateBufferUintUAV(this);
-		DxCpuDescriptorHandle shaderVisibleCPUHandle = context.DescriptorAllocatorCPU().GetMatchingCpuHandle(GpuClearUAV);
-		shaderVisibleCPUHandle.CreateBufferUintUAV(this);
+	if (SupportsUAV) {
+		DefaultUAV = context.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferUAV(this);
+	}
+	if (SupportsClearing) {
+		CpuClearUAV = context.DescriptorAllocatorCPU().GetFreeHandle().CreateBufferUintUAV(this);
+		DxCpuDescriptorHandle shaderVisibleCPUHandle = context.DescriptorAllocatorGPU().GetFreeHandle().CreateBufferUintUAV(this);
+		GpuClearUAV = context.DescriptorAllocatorGPU().GetMatchingGpuHandle(shaderVisibleCPUHandle);
+	}
+
+	if (Raytracing) {
+		RaytracingSRV = context.DescriptorAllocatorCPU().GetFreeHandle().CreateRaytracingAccelerationStructureSRV(this);
 	}
 }
 
-void DxBuffer::Free(DxBuffer &buffer) {
+BufferGrave::~BufferGrave() {
 	DxContext& context = DxContext::Instance();
-	if (DefaultSRV.CpuHandle.ptr) {
-		context.DescriptorAllocatorCPU().FreeHandle(DefaultSRV);
-	}
-	if (DefaultUAV.CpuHandle.ptr) {
-		context.DescriptorAllocatorCPU().FreeHandle(DefaultUAV);
-	}
-}
 
-DxSubmesh DxSubmesh::Create(DxMesh& mesh, SubmeshInfo info) {
-	DxSubmesh result;
-	result.VertexBuffer = mesh.VertexBuffer;
-	result.IndexBuffer = mesh.IndexBuffer;
-	result.BaseVertex = info.BaseVertex;
-	result.FirstTriangle = info.FirstTriangle;
-	result.NumTriangles = info.NumTriangles;
-	return result;
-}
-
-DxSubmesh DxSubmesh::Create(DxMesh& mesh) {
-	DxSubmesh result;
-	result.VertexBuffer = mesh.VertexBuffer;
-	result.IndexBuffer = mesh.IndexBuffer;
-	result.BaseVertex = 0;
-	result.FirstTriangle = 0;
-	result.NumTriangles = mesh.IndexBuffer.ElementCount / 3;
-	return result;
+	if (Resource) {
+		if (Srv.CpuHandle.ptr) {
+			context.DescriptorAllocatorCPU().FreeHandle(Srv);
+		}
+		if (Uav.CpuHandle.ptr) {
+			context.DescriptorAllocatorCPU().FreeHandle(Uav);
+		}
+		if (Clear.CpuHandle.ptr) {
+			context.DescriptorAllocatorCPU().FreeHandle(Clear);
+			context.DescriptorAllocatorGPU().FreeHandle(GpuClear);
+		}
+		if (Raytracing.CpuHandle.ptr) {
+			context.DescriptorAllocatorCPU().FreeHandle(Raytracing);
+		}
+	}
 }

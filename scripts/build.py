@@ -5,7 +5,7 @@ import subprocess
 
 parent_dir = os.path.dirname(os.getcwd())
 shaders_dir = os.path.join(parent_dir, 'shaders')
-shader_model = "5_1"
+shader_model = "6_5"
 
 def compile_shader(relative_path: str) -> None:
 	if relative_path.endswith('hlsli'):
@@ -15,17 +15,33 @@ def compile_shader(relative_path: str) -> None:
 	src_path = os.path.join(shaders_dir, relative_path)
 	bin_path = os.path.join(os.path.join(shaders_dir, 'bin'), name)
 	bin_path = bin_path.split('.')[0]
-	shader_name = name.split('.')[0]
-	if shader_name.endswith('ps'):
+
+	override_model = shader_model
+	if name.endswith('_ps.hlsl'):
 		shader_type = 'ps'
-	elif shader_name.endswith('vs'):
+	elif name.endswith('_vs.hlsl'):
 		shader_type = 'vs'
-	elif shader_name.endswith('cs'):
+	elif name.endswith('_cs.hlsl'):
 		shader_type = 'cs'
+	elif name.endswith('_hs.hlsl'):
+		shader_type = 'hs'
+	elif name.endswith('_ds.hlsl'):
+		shader_type = 'ds'
+	elif name.endswith('_gs.hlsl'):
+		shader_type = 'gs'
+	elif name.endswith('_ms.hlsl'):
+		shader_type = 'ms'
+		override_model = '6_5'
+	elif name.endswith('_as.hlsl'):
+		shader_type = 'as'
+		override_model = '6_5'
+	elif name.endswith('rts.hlsl'):
+		shutil.copy(src_path, f"{bin_path}.hlsl")
+		return
 	else:
 		return
 
-	compile_command = f'fxc.exe "{src_path}" /nologo /E "main" /T {shader_type}_{shader_model} /Zi /Fo "{bin_path}.cso" /Fd "{bin_path}.pdb"'
+	compile_command = f'dxc.exe /nologo /E "main" /T {shader_type}_{override_model} /Fo "{bin_path}.cso" /Fd "{bin_path}.pdb" /Od /Zi /all_resources_bound /Qembed_debug "{src_path}"'
 	try:
 		result = subprocess.check_output(compile_command, shell=True).decode()
 	except Exception as e:

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pch.h"
+#include "directx/dx.h"
 
 class BaseWindow {
 public:
@@ -9,7 +10,7 @@ public:
 
     static LRESULT CALLBACK WindowsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
     [[nodiscard]] HWND GetWindow() const { return hwnd; }
-    virtual bool Initialize(const TCHAR* name, int initialWidth = CW_USEDEFAULT, int initialHeight = CW_USEDEFAULT);
+    virtual bool Initialize(const TCHAR* name, int initialWidth = CW_USEDEFAULT, int initialHeight = CW_USEDEFAULT, ColorDepth colorDepth = EColorDepth8);
     void SetTitle(const WCHAR* format, ...);
 
     int ClientWidth = 800;

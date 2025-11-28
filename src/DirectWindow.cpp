@@ -5,7 +5,7 @@
 
 namespace {
 	int32 ComputeIntersectionArea(int32 ax1, int32 ay1, int32 ax2, int32 ay2, int32 bx1, int32 by1, int32 bx2, int32 by2) {
-		return max(0, min(ax2, bx2) - max(ax1, bx1)) * max(0, min(ay2, by2) - max(ay1, by1));
+		return Max(0, Min(ax2, bx2) - Max(ax1, bx1)) * Max(0, Min(ay2, by2) - Max(ay1, by1));
 	}
 }
 
@@ -173,14 +173,20 @@ void DirectWindow::UpdateRenderTargetView() {
 
 		_backBuffers[i] = backBuffer;
 
-		SetName(_backBuffers[i], "BackBuffer");
+		SET_NAME(_backBuffers[i], "BackBuffer");
 
 		rtvHandle.Offset(_rtvDescriptorSize);
 	}
 }
 
-bool DirectWindow::Initialize(const TCHAR* name, int initialWidth, int initialHeight) {
-	bool result = BaseWindow::Initialize(name, initialWidth, initialHeight);
+DirectWindow::~DirectWindow() {
+	DxContext::Instance().FlushApplication();
+
+	Shutdown();
+}
+
+bool DirectWindow::Initialize(const TCHAR* name, int initialWidth, int initialHeight, ColorDepth colorDepth) {
+	bool result = BaseWindow::Initialize(name, initialWidth, initialHeight, colorDepth);
 	if (!result) {
 		return false;
 	}
@@ -202,11 +208,7 @@ bool DirectWindow::Initialize(const TCHAR* name, int initialWidth, int initialHe
 	SetSwapChainColorSpace();
 	UpdateRenderTargetView();
 
-	assert(_depthFormat == DXGI_FORMAT_UNKNOWN or IsDepthFormat(_depthFormat));
-	if (_depthFormat != DXGI_FORMAT_UNKNOWN) {
-		_depthBuffer = DxTexture::CreateDepth(ClientWidth, ClientHeight, _depthFormat);
-	}
-
+	_colorDepth = colorDepth;
 	_initialized = true;
 
 	return true;
@@ -237,10 +239,6 @@ void DirectWindow::ResizeHandle() {
 		_currentBackBufferIndex = _swapChain->GetCurrentBackBufferIndex();
 
 		UpdateRenderTargetView();
-
-		if (_depthBuffer.Resource) {
-			_depthBuffer.Resize(ClientWidth, ClientHeight);
-		}
 	}
 }
 
@@ -262,6 +260,8 @@ LRESULT DirectWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	LRESULT result = 0;
 
 	switch (uMsg) {
+		case WM_SYSCHAR:
+			break;
 		case WM_SIZE:
 			if (_open) {
 				ClientWidth = LOWORD(lParam);
@@ -299,17 +299,9 @@ LRESULT DirectWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	return result;
 }
 
-CD3DX12_CPU_DESCRIPTOR_HANDLE DirectWindow::Rtv() const {
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(_rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-	rtv.Offset(_currentBackBufferIndex, _rtvDescriptorSize);
+DxRtvDescriptorHandle DirectWindow::Rtv() const {
+	CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(_rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), _currentBackBufferIndex, _rtvDescriptorSize );
 	return rtv;
-}
-
-CD3DX12_CPU_DESCRIPTOR_HANDLE DirectWindow::Dsv() const {
-	if (_depthBuffer.Resource) {
-		return _depthBuffer.DSVHandle.CpuHandle;
-	}
-	return {};
 }
 
 void DirectWindow::ToggleVSync() {

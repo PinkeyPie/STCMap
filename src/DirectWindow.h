@@ -3,16 +3,16 @@
 #include "BaseWindow.h"
 #include "directx/dx.h"
 #include "directx/DxCommandQueue.h"
-#include "directx/DxRenderPrimitives.h"
+#include "directx/DxDescriptor.h"
 
 class DirectWindow : public BaseWindow {
 public:
 	DirectWindow() = default;
 	DirectWindow(const DirectWindow&) = delete;
 	DirectWindow& operator=(const DirectWindow&) = delete;
-	~DirectWindow() override = default;
+	~DirectWindow() override;
 
-	bool Initialize(const TCHAR* name, int initialWidth, int initialHeight) override;
+	bool Initialize(const TCHAR* name, int initialWidth, int initialHeight, ColorDepth colorDepth) override;
 
 	virtual void Shutdown();
 	virtual void SwapBuffers();
@@ -29,11 +29,10 @@ public:
 	DxResource GetCurrentBackBuffer() const {
 		return _backBuffers[_currentBackBufferIndex];
 	}
-	CD3DX12_CPU_DESCRIPTOR_HANDLE Rtv() const;
+	DxRtvDescriptorHandle Rtv() const;
 	uint32 RtvDescriptorSize() const {
 		return _rtvDescriptorSize;
 	}
-	CD3DX12_CPU_DESCRIPTOR_HANDLE Dsv() const;
 	bool IsOpen() const {
 		return _open;
 	}
@@ -45,9 +44,6 @@ private:
 	Com<ID3D12DescriptorHeap> _rtvDescriptorHeap;
 	uint32 _currentBackBufferIndex;
 	int32 _rtvDescriptorSize;
-
-	DxTexture _depthBuffer;
-	DXGI_FORMAT _depthFormat = DXGI_FORMAT_UNKNOWN;
 
 	bool _tearingSupported = false;
 	bool _hdrSupport = false;

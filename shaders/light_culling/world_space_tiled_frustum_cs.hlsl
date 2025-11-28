@@ -1,6 +1,6 @@
 #include "../common/cs.hlsli"
 #include "../common/camera.hlsli"
-#include "../rs/light_culling.hlsli"
+#include "../rs/light_culling_rs.hlsli"
 
 #define BLOCK_SIZE 16
 
@@ -10,6 +10,8 @@ RWStructuredBuffer<LightCullingViewFrustum> OutFrustum : register(u0);
 
 static LightCullingFrustumPlane GetPlane(float3 p0, float3 p1, float3 p2) 
 {
+    // The plane normal points to the inside of the frustum.
+
     LightCullingFrustumPlane plane;
 
     float3 v0 = p1 - p0;
@@ -45,7 +47,7 @@ void main(CsInput cin)
     frustum.Planes[2] = GetPlane(cameraPos, tl, tr);
     frustum.Planes[3] = GetPlane(cameraPos, br, bl);
 
-    if(cin.DispatchThreadId.x < Frustum.NumThreadsX && cin.DispatchThreadId.y < Frustum.NumThreadsY)
+    if (cin.DispatchThreadId.x < Frustum.NumThreadsX && cin.DispatchThreadId.y < Frustum.NumThreadsY)
     {
         uint index = cin.DispatchThreadId.y * Frustum.NumThreadsX + cin.DispatchThreadId.x;
         OutFrustum[index] = frustum;

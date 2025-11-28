@@ -11,73 +11,65 @@ struct CameraCb
     mat4  InvView;
     mat4  InvProj;
     mat4  InvViewProj;
-    
+    mat4 PrevFrameViewProj;
+
     vec4  Position;
     vec4  Forward;
+    vec4  Right;
+    vec4  Up;
 
-    float Near;
-    float Far;
-    float FarOverNear;
-    float OneMinusFarOverNear;
+    vec4 ProjectionParams; // nearPlane, farPlane, farPlane / nearPlane, 1 - farPlane / nearPlane
 
     vec2  ScreenDims;
     vec2  InvScreenDims;
+    vec2  Jitter;
+    vec2  PrevFrameJitter;
 };
 
 #ifdef HLSL
 static float3 RestoreViewSpacePosition(float2 uv, float depth, float4x4 invProj)
 {
-    uv.y = 1.f - uv.y; // Flip Y for UV coords
-    float4 clipSpacePosition;
-    clipSpacePosition.xy = uv * 2.f - 1.f;
-    clipSpacePosition.z = depth;
-    clipSpacePosition.w = 1.f;
-    
-    float4 viewSpacePosition = mul(invProj, clipSpacePosition);
-    viewSpacePosition /= viewSpacePosition.w;
-    
-    return viewSpacePosition.xyz;
+    uv.y = 1.f - uv.y; // Screen uvs start at the top left, so flip y.
+	float3 ndc = float3(uv * 2.f - float2(1.f, 1.f), depth);
+	float4 homPosition = mul(invProj, float4(ndc, 1.f));
+	float3 position = homPosition.xyz / homPosition.w;
+	return position;
 }
 
 static float3 RestoreWorldSpacePosition(float2 uv, float depth, float4x4 invViewProj)
 {
-    uv.y = 1.f - uv.y; // Flip Y for UV coords
-    float4 clipSpacePosition;
-    clipSpacePosition.xy = uv * 2.f - 1.f;
-    clipSpacePosition.z = depth;
-    clipSpacePosition.w = 1.f;
-    
-    float4 worldSpacePosition = mul(invViewProj, clipSpacePosition);
-    worldSpacePosition /= worldSpacePosition.w;
-    
-    return worldSpacePosition.xyz;
+    uv.y = 1.f - uv.y; // Screen uvs start at the top left, so flip y.
+	float3 ndc = float3(uv * 2.f - float2(1.f, 1.f), depth);
+	float4 homPosition = mul(invViewProj, float4(ndc, 1.f));
+	float3 position = homPosition.xyz / homPosition.w;
+	return position;
 }
 
+// The directions are NOT normalized. Their z-coordinate is 'nearPlane' long.
 static float3 RestoreViewDirection(float2 uv, float4x4 invProj)
 {
-    return normalize(RestoreViewSpacePosition(uv, 1.f, invProj));
+    return RestoreViewSpacePosition(uv, 0.f, invProj);
 }
 
-static float3 RestoreWorldDirection(float2 uv, float4x4 invViewProj, float3 cameraPosition, float farPlane)
+static float3 RestoreWorldDirection(float2 uv, float4x4 invViewProj, float3 cameraPosition)
 {
-    float3 direction = RestoreWorldSpacePosition(uv, 1.f, invViewProj) - cameraPosition; // At this point, the result should be on a plane 'farPlane' units away from the camera.
-    direction /= farPlane;
-    return normalize(direction);
+    return RestoreWorldSpacePosition(uv, 0.f, invViewProj) - cameraPosition; // At this point, the result should be 'nearPlane' units away from the camera.
 }
 
-static float DepthBufferToWorldSpaceDepth(float depthBufferDepth, float near, float far, float farOverNear, float oneMinusFarOverNear)
+// This function returns a positive z value! This is a depth!
+static float DepthBufferDepthToEyeDepth(float depthBufferDepth, float4 projectionParams)
 {
-    if(far < 0.f) // Infinite far plane
-    {
-        depthBufferDepth = clamp(depthBufferDepth, 0.f, 1.f - 1e-7f);
-        return -near / (depthBufferDepth - 1.f);
-    }
-    else 
-    {
-        const float c1 = farOverNear;
-        const float c0 = oneMinusFarOverNear;
-        return far / (c0 * depthBufferDepth + c1);
-    }
+	if (projectionParams.y < 0.f) // Infinite far plane.
+	{
+		depthBufferDepth = clamp(depthBufferDepth, 0.f, 1.f - 1e-7f); // A depth of 1 is at infinity.
+		return -projectionParams.x / (depthBufferDepth - 1.f);
+	}
+	else
+	{
+		const float c1 = projectionParams.z;
+		const float c0 = projectionParams.w;
+		return projectionParams.y / (c0 * depthBufferDepth + c1);
+	}
 }
 
 struct CameraFrustumPlanes 
@@ -90,14 +82,14 @@ static bool CullWorldSpaceAABB(CameraFrustumPlanes frustum, float4 aabbMin, floa
     for (int i = 0; i < 6; ++i) 
     {
         float4 plane = frustum.planes[i];
-        float3 positiveVertex = float4(
+        float4 positiveVertex = float4(
             plane.x >= 0 ? aabbMax.x : aabbMin.x,
             plane.y >= 0 ? aabbMax.y : aabbMin.y,
             plane.z >= 0 ? aabbMax.z : aabbMin.z,
             1.f
         );
         
-        if (dot(plane.xyz, positiveVertex) < 0.f) 
+        if (dot(plane, positiveVertex) < 0.f) 
         {
             return true; // Cull
         }

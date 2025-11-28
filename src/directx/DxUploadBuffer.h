@@ -5,8 +5,6 @@
 
 #include "dx.h"
 #include "../pch.h"
-#include "../core/memory.h"
-#include "../core/threading.h"
 
 struct DxAllocation {
 	uint8* CpuPtr;
@@ -49,8 +47,8 @@ private:
 
 class DxUploadBuffer {
 public:
-	DxPagePool* PagePool;
-	DxPage* CurrentPage;
+	DxPagePool* PagePool = nullptr;
+	DxPage* CurrentPage = nullptr;
 
 	DxAllocation Allocate(uint64 size, uint64 alignment);
 	void Reset();

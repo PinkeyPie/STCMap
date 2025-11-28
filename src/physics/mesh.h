@@ -1,28 +1,35 @@
 #pragma once
-#include "colliders.h"
+
+#include "bounding_volumes.h"
 #include "../directx/DxBuffer.h"
+#include "../animation/animation.h"
+#include "geometry.h"
 
-struct aiScene;
+class PbrMaterial;
 
-struct SingleMesh {
-    SubmeshInfo Submesh;
-    AABBCollider BoundingBox;
-    std::string Name;
-};
+class Submesh {
+public:
+    SubmeshInfo Info;
+    BoundingBox AABB;
+    trs Transform;
 
-struct LodMesh {
-    uint32 FirstMesh;
-    uint32 NumMeshes;
+    Ptr<PbrMaterial> Material;
+    std::string name;
 };
 
 struct CompositeMesh {
-    std::vector<SingleMesh> SingleMeshes;
-    std::vector<LodMesh> Lods;
-    std::vector<float> LodDistances;
+    std::vector<Submesh> Submeshes;
+    AnimationSkeleton Skeleton;
     DxMesh Mesh;
+    BoundingBox AABB;
+
+    std::string Filepath;
+    uint32 Flags;
 };
 
-const aiScene* LoadAssimpScene(const char* filepathRaw);
-void FreeScene(const aiScene* scene);
-CompositeMesh CreateCompositeMeshFromScene(const aiScene* scene, uint32 flags);
-CompositeMesh CreateCompositeMeshFromFile(const char* sceneFilename, uint32 flags);
+Ptr<CompositeMesh> LoadMeshFromFile(const char* sceneFilename, uint32 flags = EMeshCreationFlagsWithPositions | EMeshCreationFlagsWithUvs | EMeshCreationFlagsWithNormals | EMeshCreationFlagsWithTangents);
+
+// Same function but with different default flags (includes skin).
+inline Ptr<CompositeMesh> LoadAnimatedMeshFromFile(const char* sceneFilename, uint32 flags = EMeshCreationFlagsWithPositions | EMeshCreationFlagsWithUvs | EMeshCreationFlagsWithNormals | EMeshCreationFlagsWithTangents | EMeshCreationFlagsWithSkin) {
+    return LoadMeshFromFile(sceneFilename, flags);
+}

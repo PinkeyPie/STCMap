@@ -29,7 +29,8 @@
 
 typedef __m128 cmpx4;
 
-struct floatx4 {
+struct floatx4
+{
 	__m128 f;
 
 	floatx4(float f_) { f = _mm_set1_ps(f_); }
@@ -41,16 +42,17 @@ struct floatx4 {
 	void store(float* f_) { _mm_storeu_ps(f_, f); }
 };
 
-struct intx4 {
+struct intx4
+{
 	__m128i i;
 
 	intx4(int i_) { i = _mm_set1_epi32(i_); }
 	intx4(__m128i i_) { i = i_; }
-	intx4(int* i_) { i = _mm_loadu_epi32(i_); }
+	//intx4(int* i_) { i = _mm_loadu_epi32(i_); } // TODO: Give non-AVX512 alternative.
 
 	operator __m128i() { return i; }
 
-	void store(int* i_) { _mm_storeu_epi32(i_, i); }
+	//void store(int* i_) { _mm_storeu_epi32(i_, i); }
 };
 
 static floatx4 truex4() { const float nnan = (const float&)0xFFFFFFFF; return nnan; }
@@ -154,6 +156,7 @@ static bool anyFalse(floatx4 a) { return !allTrue(a); }
 
 static floatx4 abs(floatx4 a) { floatx4 result = andNot(-0.f, a); return result; }
 static floatx4 floor(floatx4 a) { floatx4 result = { _mm_floor_ps(a) }; return result; }
+static floatx4 round(floatx4 a) { floatx4 result = { _mm_round_ps(a, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC) }; return result; }
 static floatx4 minimum(floatx4 a, floatx4 b) { floatx4 result = { _mm_min_ps(a, b) }; return result; }
 static floatx4 maximum(floatx4 a, floatx4 b) { floatx4 result = { _mm_max_ps(a, b) }; return result; }
 
@@ -167,7 +170,8 @@ static floatx4 signOf(floatx4 f) { return ifThen(f < 0.f, floatx4(-1), ifThen(f 
 static floatx4 signbit(floatx4 f) { return (f & -0.f) >> 31; }
 
 
-static floatx4 exp2(floatx4 x) {
+static floatx4 exp2(floatx4 x)
+{
 	x = minimum(x, 129.00000f);
 	x = maximum(x, -126.99999f);
 
@@ -178,7 +182,8 @@ static floatx4 exp2(floatx4 x) {
 	return expipart * expfpart;
 }
 
-static floatx4 log2(floatx4 x) {
+static floatx4 log2(floatx4 x)
+{
 	intx4 exp = 0x7F800000;
 	intx4 mant = 0x007FFFFF;
 
@@ -192,7 +197,8 @@ static floatx4 log2(floatx4 x) {
 	return fmadd(p, m - one, e);
 }
 
-static floatx4 pow(floatx4 x, floatx4 y) {
+static floatx4 pow(floatx4 x, floatx4 y)
+{
 	return exp2(log2(x) * y);
 }
 
@@ -206,7 +212,8 @@ typedef __mmask8 cmpx8;
 typedef __m256 cmpx8;
 #endif
 
-struct floatx8 {
+struct floatx8
+{
 	__m256 f;
 
 	floatx8(float f_) { f = _mm256_set1_ps(f_); }
@@ -218,7 +225,8 @@ struct floatx8 {
 	void store(float* f_) { _mm256_storeu_ps(f_, f); }
 };
 
-struct intx8 {
+struct intx8
+{
 	__m256i i;
 
 	intx8(int i_) { i = _mm256_set1_epi32(i_); }
@@ -371,7 +379,8 @@ static floatx8 clamp01(floatx8 v) { return clamp(v, 0.f, 1.f); }
 static floatx8 signOf(floatx8 f) { return ifThen(f < 0.f, floatx8(-1), ifThen(f == 0.f, zerox8(), floatx8(1))); }
 static floatx8 signbit(floatx8 f) { return (f & -0.f) >> 31; }
 
-static floatx8 exp2(floatx8 x) {
+static floatx8 exp2(floatx8 x)
+{
 	x = minimum(x, 129.00000f);
 	x = maximum(x, -126.99999f);
 
@@ -382,7 +391,8 @@ static floatx8 exp2(floatx8 x) {
 	return expipart * expfpart;
 }
 
-static floatx8 log2(floatx8 x) {
+static floatx8 log2(floatx8 x)
+{
 	intx8 exp = 0x7F800000;
 	intx8 mant = 0x007FFFFF;
 
@@ -396,7 +406,8 @@ static floatx8 log2(floatx8 x) {
 	return fmadd(p, m - one, e);
 }
 
-static floatx8 pow(floatx8 x, floatx8 y) {
+static floatx8 pow(floatx8 x, floatx8 y)
+{
 	return exp2(log2(x) * y);
 }
 
@@ -407,7 +418,8 @@ static floatx8 pow(floatx8 x, floatx8 y) {
 
 typedef __mmask16 cmpx16;
 
-struct floatx16 {
+struct floatx16
+{
 	__m512 f;
 
 	floatx16(float f_) { f = _mm512_set1_ps(f_); }
@@ -419,7 +431,8 @@ struct floatx16 {
 	void store(float* f_) { _mm512_storeu_ps(f_, f); }
 };
 
-struct intx16 {
+struct intx16
+{
 	__m512i i;
 
 	intx16(int i_) { i = _mm512_set1_epi32(i_); }
@@ -545,7 +558,8 @@ static floatx16 clamp01(floatx16 v) { return clamp(v, 0.f, 1.f); }
 static floatx16 signOf(floatx16 f) { return ifThen(f < 0.f, floatx16(-1), ifThen(f == 0.f, zerox16(), floatx16(1))); }
 static floatx16 signbit(floatx16 f) { return (f & -0.f) >> 31; }
 
-static floatx16 exp2(floatx16 x) {
+static floatx16 exp2(floatx16 x)
+{
 	x = minimum(x, 129.00000f);
 	x = maximum(x, -126.99999f);
 
@@ -556,7 +570,8 @@ static floatx16 exp2(floatx16 x) {
 	return expipart * expfpart;
 }
 
-static floatx16 log2(floatx16 x) {
+static floatx16 log2(floatx16 x)
+{
 	intx16 exp = 0x7F800000;
 	intx16 mant = 0x007FFFFF;
 
@@ -570,7 +585,8 @@ static floatx16 log2(floatx16 x) {
 	return fmadd(p, m - one, e);
 }
 
-static floatx16 pow(floatx16 x, floatx16 y) {
+static floatx16 pow(floatx16 x, floatx16 y)
+{
 	return exp2(log2(x) * y);
 }
 

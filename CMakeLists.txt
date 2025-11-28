@@ -17,7 +17,8 @@ endif()
 
 find_package(directxtex CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
-find_package(entt CONFIG REQUIRED)
+find_package(EnTT CONFIG REQUIRED)
+#find_path(ENTT_INCLUDE_DIRS "entt/config/config.h")
 
 set(src_files "")
 set(local_libs_dir "")
@@ -58,13 +59,12 @@ if(WIN32)
             Comctl32.lib
             /MACHINE:X64
     )
-    list(APPEND src_files ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/dx/DDSTextureLoader.cpp)
     set(shaders_dir ${PROJECT_SOURCE_DIR}/shaders)
-    add_executable(${PROJECT_NAME} ${src_files} ${headers})
+    add_executable(${PROJECT_NAME} ${src_files} ${headers} ${PROJECT_SOURCE_DIR}/thirdparty/half/half.c)
     target_compile_options(${PROJECT_NAME} INTERFACE /arch:SSE4.1)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE TRUE)
     target_compile_definitions(${PROJECT_NAME} PRIVATE UNICODE _UNICODE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE dxgi d3d12 dxguid d3dcompiler runtimeobject
+    target_link_libraries(${PROJECT_NAME} PRIVATE dxgi d3d12 dxguid d3dcompiler dxcompiler
             assimp::assimp
             EnTT::EnTT
             Microsoft::DirectXTex
@@ -72,7 +72,8 @@ if(WIN32)
     target_include_directories(${PROJECT_NAME} PRIVATE
             ${shaders_dir}/common
             ${shaders_dir}/rs
-            ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
+            ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
+    )
 else ()
     add_executable(${PROJECT_NAME} ${src_files})
     target_compile_options(${PROJECT_NAME} INTERFACE -msse4.1)
@@ -83,8 +84,19 @@ if(EXISTS ${PROJECT_SOURCE_DIR}/shaders/bin)
         file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders)
     endif ()
     file(GLOB dir RELATIVE ${PROJECT_SOURCE_DIR}/shaders/bin ${PROJECT_SOURCE_DIR}/shaders/bin/*.cso)
+    file(GLOB dir RELATIVE ${PROJECT_SOURCE_DIR}/shaders/bin ${PROJECT_SOURCE_DIR}/shaders/bin/*.hlsl)
     foreach (file ${dir})
         file(COPY_FILE ${PROJECT_SOURCE_DIR}/shaders/bin/${file} ${CMAKE_CURRENT_BINARY_DIR}/shaders/${file})
+    endforeach ()
+endif ()
+
+if(EXISTS ${PROJECT_SOURCE_DIR}/shaders/common)
+    if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/common)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/common)
+    endif ()
+    file(GLOB dir RELATIVE ${PROJECT_SOURCE_DIR}/shaders/common ${PROJECT_SOURCE_DIR}/shaders/common/*.hlsli)
+    foreach (file ${dir})
+        file(COPY_FILE ${PROJECT_SOURCE_DIR}/shaders/common/${file} ${CMAKE_CURRENT_BINARY_DIR}/common/${file})
     endforeach ()
 endif ()
 

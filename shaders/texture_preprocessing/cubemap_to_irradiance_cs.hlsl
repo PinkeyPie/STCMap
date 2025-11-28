@@ -24,7 +24,7 @@ TextureCube<float4> SrcTexture : register(t0);
 
 RWTexture2DArray<float4> DstTexture : register(u0);
 
-SamplerState LinearSampler : register(s0);
+SamplerState LinearRepeatSampler : register(s0);
 
 // Transfrom from dispatch Id to cubemap face direction
 static const float3x3 RotateUV[6] = {
@@ -58,48 +58,54 @@ static const float3x3 RotateUV[6] = {
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(CsInput input) 
 {
-    uint3 texCoord = input.DispatchThreadId;
+    // Cubemap texture coords.
+	uint3 texCoord = input.DispatchThreadId;
 
-    if(texCoord.x >= IrradianceMapSize || texCoord.y >= IrradianceMapSize) 
-    {
-        return;
-    }
+	// First check if the thread is in the cubemap dimensions.
+	if (texCoord.x >= IrradianceMapSize || texCoord.y >= IrradianceMapSize) return;
 
-    float3 dir = float3(texCoord.xy / float(IrradianceMapSize) - 0.5f, 0.5f);
-    dir = normalize(mul(RotateUV[texCoord.z], dir));
+	// Map the UV coords of the cubemap face to a direction.
+	// [(0, 0), (1, 1)] => [(-0.5, -0.5), (0.5, 0.5)]
+	float3 dir = float3(texCoord.xy / float(IrradianceMapSize) - 0.5f, 0.5f);
+	dir = normalize(mul(RotateUV[texCoord.z], dir));
 
-    float3 up = float3(0.f, 1.f, 0.f);
-    float3 right = normalize(cross(up, dir));
-    up = normalize(cross(dir, right));
+	float3 up = float3(0.f, 1.f, 0.f);
+	float3 right = cross(up, dir);
+	up = cross(dir, right);
 
-    float3 irradiance = float3(0.f, 0.f, 0.f);
+	float3 irradiance = float3(0.f, 0.f, 0.f);
 
-    uint srcWidth, srcHeight, numMips;
-    SrcTexture.GetDimensions(0, srcWidth, srcHeight, numMips);
 
-    float sampleLevel = log2((float)srcWidth / (float)IrradianceMapSize);
+	uint srcWidth, srcHeight, numMipLevels;
+	SrcTexture.GetDimensions(0, srcWidth, srcHeight, numMipLevels);
 
-    const float SAMPLE_DELTA = 0.025f;
-    float nrSamples = 0.f;
-    for(float phi = 0.f; phi < 2.f * PI; phi += SAMPLE_DELTA) 
-    {
-        for(float theta = 0.f; theta < 0.5f * PI; theta += SAMPLE_DELTA) 
-        {
-            // spherical to cartesian (in tangent space)
-            float3 tangentSample;
-            tangentSample.x = sin(theta) * cos(phi);
-            tangentSample.y = sin(theta) * sin(phi);
-            tangentSample.z = cos(theta);
+	float sampleMipLevel = log2((float)srcWidth / (float)IrradianceMapSize);
 
-            // tangent space to world
-            float3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * dir;
+	const float sampleDelta = 0.025f;
+	float nrSamples = 0.f;
+	for (float phi = 0.f; phi < 2.f * PI; phi += sampleDelta)
+	{
+		for (float theta = 0.f; theta < 0.5f * PI; theta += sampleDelta)
+		{
+			float sinTheta, cosTheta;
+			float sinPhi, cosPhi;
+			sincos(theta, sinTheta, cosTheta);
+			sincos(phi, sinPhi, cosPhi);
 
-            irradiance += SrcTexture.SampleLevel(LinearSampler, sampleVec, sampleLevel).xyz * cos(theta) * sin(theta);
-            nrSamples++;
-        }
-    }
+			// Spherical to cartesian (in tangent space).
+			float3 tangentSample = float3(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta);
+			// Tangent space to world.
+			float3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * dir;
 
-    irradiance = PI * irradiance * (1.f / nrSamples);
+			sampleVec.z *= UvzScale;
 
-    DstTexture[uint3(texCoord.xy, texCoord.z)] = float4(irradiance, 1.f);
+			float4 color = SrcTexture.SampleLevel(LinearRepeatSampler, sampleVec, sampleMipLevel);
+			irradiance += color.xyz * cosTheta * sinTheta;
+			nrSamples++;
+		}
+	}
+
+	irradiance = PI * irradiance * (1.f / float(nrSamples));
+
+	DstTexture[texCoord] = float4(irradiance, 1.f);
 }

@@ -1,7 +1,13 @@
 {
-  "dependencies": [
+  "dependencies" : [
     "assimp",
     "directxtex",
     "entt"
+  ],
+  "overrides": [
+    {
+      "name": "entt",
+      "version": "3.5.1#0"
+    }
   ]
 }

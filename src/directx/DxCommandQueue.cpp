@@ -1,6 +1,8 @@
 #include "DxCommandQueue.h"
 
 #include "DxContext.h"
+#include "../core/threading.h"
+#include "DxCommandList.h"
 
 namespace {
 	DWORD ProcessRunningCommandAllocators(void* data);
@@ -18,17 +20,22 @@ void DxCommandQueue::Initialize(DxDevice device) {
 	ThrowIfFailed(device->CreateCommandQueue(&desc, IID_PPV_ARGS(NativeQueue.GetAddressOf())));
 	ThrowIfFailed(device->CreateFence(_fenceValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(_fence.GetAddressOf())));
 
-	_freeAllocThread = std::thread([&] { ProcessRunningCommandAllocators(); });
+	_timestampFrequency = 0; // Default value, if timing is not supported on this queue
+	if (SUCCEEDED(NativeQueue->GetTimestampFrequency(&_timestampFrequency))) {
+		// TODO: Calibrate command queue time line with CPU.
+	}
+
+	_processThread = std::thread([&] { ProcessRunningCommandAllocators(); });
 
 	switch (CommandListType) {
 	case D3D12_COMMAND_LIST_TYPE_DIRECT:
-		SetName(NativeQueue, "Render command queue");
+		SET_NAME(NativeQueue, "Render command queue");
 		break;
 	case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-		SetName(NativeQueue, "Compute command queue");
+		SET_NAME(NativeQueue, "Compute command queue");
 		break;
 	case D3D12_COMMAND_LIST_TYPE_COPY:
-		SetName(NativeQueue, "Copy command queue");
+		SET_NAME(NativeQueue, "Copy command queue");
 		break;
 	default:
 		break;
@@ -65,37 +72,38 @@ void DxCommandQueue::WaitForOtherQueue(DxCommandQueue& other) const {
 }
 
 void DxCommandQueue::Flush() {
-	while (_numRunningCommandAllocators) {}
+	while (_numRunningCommandLists) {}
 
 	WaitForFence(Signal());
 }
 
 void DxCommandQueue::LeaveThread() {
-	if (_freeAllocThread.joinable()) {
-		_freeAllocThread.join();
+	if (_processThread.joinable()) {
+		_processThread.join();
 	}
 }
 
 void DxCommandQueue::ProcessRunningCommandAllocators() {
 	DxContext& dxContext = DxContext::Instance();
+
 	while (dxContext.IsRunning()) {
 		while (true) {
-			_mutex.lock();
-			DxCommandAllocator* allocator = _runningCommandAllocators;
-			if (allocator) {
-				_runningCommandAllocators = allocator->Next;
+			_commandListMutex.lock();
+			DxCommandList* list = _runningCommandLists;
+			if (list) {
+				_runningCommandLists = list->_next;
 			}
-			_mutex.unlock();
+			_commandListMutex.unlock();
 
-			if (allocator) {
-				WaitForFence(allocator->LastExecutionFenceValue);
-				allocator->CommandAllocator->Reset();
+			if (list) {
+				WaitForFence(list->_lastExecutionFenceValue);
+				list->Reset();
 
-				_mutex.lock();
-				allocator->Next = _freeCommandAllocators;
-				_freeCommandAllocators = allocator;
-				AtomicDecrement(_numRunningCommandAllocators);
-				_mutex.unlock();
+				_commandListMutex.lock();
+				list->_next = _freeCommandLists;
+				_freeCommandLists = list;
+				AtomicDecrement(_numRunningCommandLists);
+				_commandListMutex.unlock();
 			}
 			else {
 				break;
@@ -107,23 +115,20 @@ void DxCommandQueue::ProcessRunningCommandAllocators() {
 }
 
 DxCommandList *DxCommandQueue::GetFreeCommandList() {
-	_mutex.lock();
+	_commandListMutex.lock();
 	DxCommandList* result = _freeCommandLists;
 	if (result) {
 		_freeCommandLists = result->_next;
 	}
-	_mutex.unlock();
+	_commandListMutex.unlock();
 
-	return result;
-}
-
-DxCommandAllocator *DxCommandQueue::GetFreeCommandAllocator() {
-	_mutex.lock();
-	DxCommandAllocator* result = _freeCommandAllocators;
-	if (result) {
-		_freeCommandAllocators = result->Next;
+	if (not result) {
+		result = new DxCommandList(CommandListType);
+		ThrowIfFailed(result->_commandList->Close());
+		result->Reset();
+		AtomicIncrement(_totalNumCommandLists);
 	}
-	_mutex.unlock();
+
 
 	return result;
 }
@@ -136,19 +141,15 @@ uint64 DxCommandQueue::Execute(DxCommandList* commandList) {
 
 	uint64 fenceValue = Signal();
 
-	DxCommandAllocator* allocator = commandList->_commandAllocator;
-	allocator->LastExecutionFenceValue = fenceValue;
+	commandList->_lastExecutionFenceValue = fenceValue;
 
-	_mutex.lock();
+	_commandListMutex.lock();
 
-	allocator->Next = _runningCommandAllocators;
-	_runningCommandAllocators = allocator;
-	AtomicIncrement(_numRunningCommandAllocators);
+	commandList->_next = _runningCommandLists;
+	_runningCommandLists = commandList;
+	AtomicIncrement(_numRunningCommandLists);
 
-	commandList->_next = _freeCommandLists;
-	_freeCommandLists = commandList;
-
-	_mutex.unlock();
+	_commandListMutex.unlock();
 
 	return _fenceValue;
 }

@@ -3,60 +3,29 @@
 #include "../core/math.h"
 #include "../core/camera.h"
 
-#define MAX_NUM_SUN_SHADOW_CASCADES 4
-#define SHADOW_MAP_NEGATIVE_Z_OFFSET 100.f
+#include "light_source.hlsli"
 
-struct LightAttenuation {
-    float Constant = 1.f;
-    float Linear;
-    float Quadratic;
-
-    float GetAttenuation(float distance) const {
-        return 1.f / (Constant + Linear * distance + Quadratic * distance * distance);
-    }
-
-    float GetMaxDistance(float lightMax) const {
-        return (-Linear + sqrt(Linear * Linear - 4.f * Quadratic * (Constant - (256.f / 5.f) * lightMax))) / (2.f * Quadratic);
-    }
-};
+#define SHADOW_MAP_NEGATIVE_Z_OFFSET 1000.f
 
 struct DirectionalLight {
-    mat4 ViewProj[MAX_NUM_SUN_SHADOW_CASCADES];
+    vec3 Direction;
+    uint32 NumShadowCascades;
+
+    vec3 Color;
+    float Intensity;
+
     vec4 CascadeDistances;
     vec4 Bias;
 
-    vec4 WorldSpaceDirection;
-    vec4 Color;
+    mat4 ViewProj[MAX_NUM_SHADOW_CASCADES];
 
-    uint32 NumShadowCascades = 3;
-    float BlendArea;
-    float TexelSize;
-    uint32 ShadowMapDimensions = 2048;
+    vec4 BlendDistances;
+    uint32 ShadowDimensions;
 
-    void UpdateMatrices(const RenderCamera& camera);
+    // 'PreventRotationalShimmering' uses bounding spheres instead of bounding boxes.
+    // This prevents shimmering along shadow edges, when the camera rotates.
+    // It slightly reduces shadow map resolution though.
+    void UpdateMatrices(const RenderCamera& camera, bool preventRotationalShimmering = true);
 };
 
-struct SpotLight {
-    mat4 ViewProj;
-
-    vec4 WorldSpacePosition;
-    vec4 WorldSpaceDirection;
-    vec4 Color;
-
-    LightAttenuation Attenuation;
-
-    float InnerAngle;
-    float OuterAngle;
-    float InnerCutoff;  // cos(InnerAngle)
-    float OuterCutoff;  // cos(OuterAngle)
-    float TexelSize;
-    float Bias;
-    uint32 ShadowMapDimensions = 2048;
-
-    void UpdateMatrices();
-};
-
-struct PointLight {
-    vec4 WorldSpacePositionAndRadius;
-    vec4 Color;
-};
+mat4 GetSpotlightViewProjMatrix(const SpotLightCb& sl);

@@ -25,16 +25,54 @@
 static float lerp(float l, float u, float t) { return l + t * (u - l); }
 static float inverseLerp(float l, float u, float v) { return (v - l) / (u - l); }
 static float remap(float v, float oldL, float oldU, float newL, float newU) { return lerp(newL, newU, inverseLerp(oldL, oldU, v)); }
-static float clamp(float v, float l, float u) { return min(u, max(l, v)); }
-static uint32 clamp(uint32 v, uint32 l, uint32 u) { return min(u, max(l, v)); }
-static int32 clamp(int32 v, int32 l, int32 u) { return min(u, max(l, v)); }
+static float clamp(float v, float l, float u) { return Min(u, Max(l, v)); }
+static uint32 clamp(uint32 v, uint32 l, uint32 u) { return Min(u, Max(l, v)); }
+static int32 clamp(int32 v, int32 l, int32 u) { return Min(u, Max(l, v)); }
 static float clamp01(float v) { return clamp(v, 0.f, 1.f); }
 static uint32 bucketize(uint32 problemSize, uint32 bucketSize) { return (problemSize + bucketSize - 1) / bucketSize; }
+static constexpr bool isPowerOfTwo(uint32 i) { return (i & (i - 1)) == 0; }
 
-struct vec2 {
+// Constexpr-version of _BitScanForward.
+static constexpr uint32 IndexOfLeastSignificantSetBit(uint32 mask) {
+	uint32 count = 0;
+
+	if (mask != 0) {
+		while ((mask & 1) == 0) {
+			mask >>= 1;
+			++count;
+		}
+	}
+	return count;
+}
+
+struct half {
+	uint16 h;
+
+	half() {}
+	half(uint16 in) : h(in) {}
+	half(float f);
+
+	operator float();
+};
+
+half operator+(half a, half b);
+half& operator+=(half& a, half b);
+
+half operator-(half a, half b);
+half& operator-=(half& a, half b);
+
+half operator*(half a, half b);
+half& operator*=(half& a, half b);
+
+half operator/(half a, half b);
+half& operator/=(half& a, half b);
+
+struct vec2
+{
 	float x, y;
 
 	vec2() {}
+	vec2(float v) : vec2(v, v) {}
 	vec2(float x_, float y_) { x = x_; y = y_; }
 };
 
@@ -54,8 +92,9 @@ union vec3 {
 	};
 
 	vec3() {}
+	vec3(float v) : vec3(v, v, v) {}
 	vec3(float x_, float y_, float z_) { x = x_; y = y_; z = z_; }
-	vec3(vec2 v2, float z_) { x= v2.x; y = v2.y; z = z_; }
+	vec3(vec2 v2, float z_) { x = v2.x; y = v2.y; z = z_; }
 };
 
 union vec4 {
@@ -69,10 +108,15 @@ union vec4 {
 		vec3 xyz;
 		float w;
 	};
+	struct {
+		vec2 xy;
+		vec2 zw;
+	};
 	floatx4 f4;
 	float data[4];
 
 	vec4() {}
+	vec4(float v) : vec4(v, v, v, v) {}
 	vec4(float x_, float y_, float z_, float w_) { x = x_; y = y_; z = z_; w = w_; }
 	vec4(floatx4 f4_) { f4 = f4_; }
 	vec4(vec3 v3, float w_) { x = v3.x; y = v3.y; z = v3.z; w = w_; }
@@ -267,20 +311,14 @@ static vec4 col(mat4 a, uint32 c) { return a.cols[c]; }
 struct trs {
 	quat rotation;
 	vec3 position;
-	float scale;
+	vec3 scale;
 
 	trs() {}
-	trs(vec3 position_, quat rotation_, float scale_) { position = position_; rotation = rotation_; scale = scale_; }
+	trs(vec3 position_, quat rotation_, vec3 scale_ = { 1.f, 1.f, 1.f }) { position = position_; rotation = rotation_; scale = scale_; }
 	trs(const mat4& m);
 
 	static const trs identity;
 };
-
-
-
-
-
-
 
 // Vec2 operators.
 static vec2 operator+(vec2 a, vec2 b) { vec2 result = { a.x + b.x, a.y + b.y }; return result; }
@@ -300,6 +338,7 @@ static vec2& operator/=(vec2& a, float b) { a = a / b; return a; }
 
 static vec2 operator-(vec2 a) { return vec2(-a.x, -a.y); }
 
+static bool operator==(vec2 a, vec2 b) { return a.x == b.x && a.y == b.y; }
 
 // Vec3 operators.
 static vec3 operator+(vec3 a, vec3 b) { vec3 result = { a.x + b.x, a.y + b.y, a.z + b.z }; return result; }
@@ -340,11 +379,21 @@ static vec4& operator/=(vec4& a, float b) { a = a / b; return a; }
 
 static vec4 operator-(vec4 a) { return vec4(-a.f4); }
 
+static bool operator==(vec4 a, vec4 b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
 
 static float dot(vec2 a, vec2 b) { float result = a.x * b.x + a.y * b.y; return result; }
 static float dot(vec3 a, vec3 b) { float result = a.x * b.x + a.y * b.y + a.z * b.z; return result; }
 static float dot(vec4 a, vec4 b) { floatx4 m = a.f4 * b.f4; return addElements(m); }
 
+
+static bool operator==(mat4 a, mat4 b) {
+	for (uint32 i = 0; i < 16; ++i) {
+		if (a.m[i] != b.m[i]) {
+			return false;
+		}
+	}
+	return true;
+}
 
 static vec3 cross(vec3 a, vec3 b) { vec3 result = { a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x }; return result; }
 
@@ -367,6 +416,8 @@ static vec4 normalize(vec4 a) { float l = length(a); return a * (1.f / l); }
 static vec2 abs(vec2 a) { return vec2(abs(a.x), abs(a.y)); }
 static vec3 abs(vec3 a) { return vec3(abs(a.x), abs(a.y), abs(a.z)); }
 static vec4 abs(vec4 a) { return vec4(abs(a.f4)); }
+
+static vec4 round(vec4 a) { return vec4(round(a.f4)); }
 
 static quat normalize(quat a) { return { normalize(a.v4).f4 }; }
 static quat conjugate(quat a) { return { -a.x, -a.y, -a.z, a.w }; }
@@ -391,7 +442,6 @@ static vec3 operator*(quat q, vec3 v) {
 	return (q * p * conjugate(q)).v;
 }
 
-
 static vec2 operator*(mat2 a, vec2 b) { vec2 result = { dot(row(a, 0), b), dot(row(a, 1), b) }; return result; }
 static vec3 operator*(mat3 a, vec3 b) { vec3 result = { dot(row(a, 0), b), dot(row(a, 1), b), dot(row(a, 2), b) }; return result; }
 
@@ -401,13 +451,10 @@ static vec4 operator*(mat4 a, vec4 b) { vec4 result = { dot(row(a, 0), b), dot(r
 static vec4 operator*(mat4 a, vec4 b) { vec4 result = col(a, 0) * b.x + col(a, 1) * b.y + col(a, 2) * b.z + col(a, 3) * b.w; return result; }
 #endif
 
-
-
 static vec2 lerp(vec2 l, vec2 u, float t) { return l + t * (u - l); }
 static vec3 lerp(vec3 l, vec3 u, float t) { return l + t * (u - l); }
 static vec4 lerp(vec4 l, vec4 u, float t) { return l + t * (u - l); }
 static quat lerp(quat l, quat u, float t) { quat result; result.v4 = lerp(l.v4, u.v4, t); return normalize(result); }
-
 
 mat2 operator*(mat2 a, mat2 b);
 mat3 operator*(mat3 a, mat3 b);
@@ -442,6 +489,7 @@ vec3 inverseTransformDirection(trs m, vec3 dir);
 
 quat rotateFromTo(quat from, quat to);
 quat rotateFromTo(vec3 from, vec3 to);
+quat LookAtQuaternion(vec3 forward, vec3 up);
 void getAxisRotation(quat q, vec3& axis, float& angle);
 void decomposeQuaternionIntoTwistAndSwing(quat q, vec3 normalizedTwistAxis, quat& twist, quat& swing);
 
@@ -451,10 +499,14 @@ quat nlerp(quat from, quat to, float t);
 mat3 quaternionToMat3(quat q);
 quat mat3ToQuaternion(mat3 m);
 
+vec3 quatToEuler(quat q);
+quat eulerToQuat(vec3 euler);
+
 mat4 trsToMat4(const trs& transform);
 
 mat4 CreatePerspectiveProjectionMatrix(float fov, float aspect, float nearPlane, float farPlane);
 mat4 CreatePerspectiveProjectionMatrix(float width, float height, float fx, float fy, float cx, float cy, float nearPlane, float farPlane);
+mat4 CreatePerspectiveProjectionMatrix(float r, float l, float t, float b, float nearPlane, float farPlane);
 mat4 CreateOrthographicProjectionMatrix(float r, float l, float t, float b, float nearPlane, float farPlane);
 mat4 InvertPerspectiveProjectionMatrix(mat4 m);
 mat4 InvertOrthographicProjectionMatrix(mat4 m);
@@ -488,6 +540,11 @@ inline std::ostream& operator<<(std::ostream& s, vec3 v) {
 }
 
 inline std::ostream& operator<<(std::ostream& s, vec4 v) {
+	s << "[" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << "]";
+	return s;
+}
+
+inline std::ostream& operator<<(std::ostream& s, quat v) {
 	s << "[" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << "]";
 	return s;
 }

@@ -34,7 +34,7 @@ RWTexture2DArray<float4> DstMip4 : register(u3);
 RWTexture2DArray<float4> DstMip5 : register(u4);
 
 // Linear repeat sampler
-SamplerState LinearSampler : register(s0);
+SamplerState LinearRepeatSampler : register(s0);
 
 // Transfrom from dispatch Id to cubemap face direction
 static const float3x3 RotateUV[6] = {
@@ -66,12 +66,12 @@ static const float3x3 RotateUV[6] = {
 
 float SRGBToLinear(float3 x) 
 {
-    return x < 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4);
+    return x.r < 0.04045f && x.g < 0.04045f && x.b < 0.04045f ? x / 12.92f : pow((x + 0.055f) / 1.055f, 2.4f);
 }
 
 float3 LinearToSRGB(float3 x) 
 {
-    return x <= 0.0031308 ? x * 12.92 : 1.055 * pow(x, 1.0 / 2.4) - 0.055;
+    return x.r < 0.0031308f && x.g < 0.0031308f && x.b < 0.0031308f ? 12.92f * x : 1.055f * pow(abs(x), 1.f / 2.4f) - 0.055f;
 }
 
 float PackColor(float4 x) 
@@ -90,42 +90,49 @@ float PackColor(float4 x)
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(CsInput input) 
 {
-    // Calculate the texel coordinates in the cubemap face
-    uint3 texCoord = input.DispatchThreadId;
+    // Cubemap texture coords.
+	uint3 texCoord = input.DispatchThreadId;
 
-    // First chec it the thread is the cubemap face bounds
-    if(texCoord.x >= CubemapSize || texCoord.y >= CubemapSize) 
-    {
-        return;
-    }
+	// First check if the thread is in the cubemap dimensions.
+	if (texCoord.x >= CubemapSize || texCoord.y >= CubemapSize) return;
 
-    // Map the UV coords of the cubemap face to a direction
+	// Map the UV coords of the cubemap face to a direction
 	// [(0, 0), (1, 1)] => [(-0.5, -0.5), (0.5, 0.5)]
-    float3 dir = float3(texCoord.xy / float(CubemapSize) - 0.5f, 0.5f);
-    // Rotate the cubemap face
-    dir = normalize(mul(RotateUV[texCoord.z], dir));
-    dir.z = -dir.z; // Flip Z to match the expected cubemap orientation
+	float3 dir = float3(texCoord.xy / float(CubemapSize) - 0.5f, 0.5f);
 
-    // Convert the direction to equirectangular UV coords
-    float2 uv = float2(atan2(-dir.x, -dir.z), acos(dir.y)) * INV_ATAN;
+	// Rotate to cubemap face
+	dir = normalize(mul(RotateUV[texCoord.z], dir));
+	dir.z *= -1.f;
 
-    DstMip1[texCoord] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel));
 
-    // Only perform on thread that are a multiple of the mip level size
-    if(NumMipLevels > 2 && (input.GroupIndex & 0x11) == 0)
-    {
-        DstMip2[uint3(texCoord.xy / 2, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 1));
-    }
-    if(NumMipLevels > 3 && (input.GroupIndex & 0x33) == 0)
-    {
-        DstMip3[uint3(texCoord.xy / 4, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 2));
-    }
-    if(NumMipLevels > 4 && (input.GroupIndex & 0x77) == 0)
-    {
-        DstMip4[uint3(texCoord.xy / 8, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 3));
-    }
-    if(NumMipLevels > 5 && (input.GroupIndex & 0xFF) == 0)
-    {
-        DstMip5[uint3(texCoord.xy / 16, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearSampler, uv, FirstMipLevel + 4));
-    }
+	// Convert the world space direction into U,V texture coordinates in the panoramic texture.
+	// Source: http://gl.ict.usc.edu/Data/HighResProbes/
+	float2 panoUV = float2(atan2(-dir.x, -dir.z), acos(dir.y)) * INV_ATAN;
+
+	DstMip1[texCoord] = PackColor(SrcTexture.SampleLevel(LinearRepeatSampler, panoUV, FirstMipLevel));
+
+	// Only perform on threads that are a multiple of 2.
+	if (NumMipLevels > 1 && (input.GroupIndex & 0x11) == 0)
+	{
+		DstMip2[uint3(texCoord.xy / 2, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearRepeatSampler, panoUV, FirstMipLevel + 1));
+	}
+
+	// Only perform on threads that are a multiple of 4.
+	if (NumMipLevels > 2 && (input.GroupIndex & 0x33) == 0)
+	{
+		DstMip3[uint3(texCoord.xy / 4, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearRepeatSampler, panoUV, FirstMipLevel + 2));
+	}
+
+	// Only perform on threads that are a multiple of 8.
+	if (NumMipLevels > 3 && (input.GroupIndex & 0x77) == 0)
+	{
+		DstMip4[uint3(texCoord.xy / 8, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearRepeatSampler, panoUV, FirstMipLevel + 3));
+	}
+
+	// Only perform on threads that are a multiple of 16.
+	// This should only be thread 0 in this group.
+	if (NumMipLevels > 4 && (input.GroupIndex & 0xFF) == 0)
+	{
+		DstMip5[uint3(texCoord.xy / 16, texCoord.z)] = PackColor(SrcTexture.SampleLevel(LinearRepeatSampler, panoUV, FirstMipLevel + 4));
+	}
 }

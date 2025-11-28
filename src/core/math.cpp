@@ -1,5 +1,5 @@
 #include "math.h"
-
+#include "half/half.h"
 
 const mat2 mat2::identity =
 {
@@ -47,7 +47,23 @@ const quat quat::identity = { 0.f, 0.f, 0.f, 1.f };
 
 const trs trs::identity = { vec3(0.f, 0.f, 0.f), quat(0.f, 0.f, 0.f, 1.f), 1.f };
 
+half::half(float f) {
+	h = half_from_float(*(uint32*)&f);
+}
 
+half::operator float() {
+	uint32 f = half_to_float(h);
+	return *(float*)&f;
+}
+
+half operator+(half a, half b) { return half_add(a.h, b.h); }
+half& operator+=(half& a, half b) {	a = a + b; return a; }
+half operator-(half a, half b) { return half_sub(a.h, b.h); }
+half& operator-=(half& a, half b) {	a = a - b; return a; }
+half operator*(half a, half b) { return half_mul(a.h, b.h); }
+half& operator*=(half& a, half b) {	a = a * b; return a; }
+half operator/(half a, half b) { return half_div(a.h, b.h); }
+half& operator/=(half& a, half b) { a = a / b; return a; }
 
 mat2 operator*(mat2 a, mat2 b) {
 	vec2 r0 = row(a, 0);
@@ -496,6 +512,7 @@ mat3 quaternionToMat3(quat q) {
 }
 
 quat mat3ToQuaternion(mat3 m) {
+#if 1
 	float tr = m.m00 + m.m11 + m.m22;
 
 	quat result;
@@ -527,8 +544,62 @@ quat mat3ToQuaternion(mat3 m) {
 		result.y = (m.m12 + m.m21) / s;
 		result.z = 0.25f * s;
 	}
-
+#else
+	quat result;
+	result.w = sqrt(1.f + m.m00 + m.m11 + m.m22) * 0.5f;
+	float w4 = 1.f / (4.f * result.w);
+	result.x = (m.m21 - m.m12) * w4;
+	result.y = (m.m02 - m.m20) * w4;
+	result.z = (m.m10 - m.m02) * w4;
+#endif
 	return normalize(result);
+}
+
+vec3 quatToEuler(quat q) {
+	float roll, pitch, yaw;
+
+	// Roll (x-axis rotation).
+	float sinr_cosp = 2.f * (q.w * q.x + q.y * q.z);
+	float cosr_cosp = 1.f - 2.f * (q.x * q.x + q.y * q.y);
+	yaw = atan2(sinr_cosp, cosr_cosp);
+
+	// Pitch (y-axis rotation).
+	float sinp = 2.f * (q.w * q.y - q.z * q.x);
+	if (abs(sinp) >= 1.f) {
+		roll = copysign(PI / 2, sinp); // Use 90 degrees if out of range.
+	}
+	else {
+		roll = asin(sinp);
+	}
+
+	// Yaw (z-axis rotation).
+	float siny_cosp = 2 * (q.w * q.z + q.x * q.y);
+	float cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
+	pitch = atan2(siny_cosp, cosy_cosp);
+
+	return vec3(pitch, yaw, roll);
+}
+
+quat eulerToQuat(vec3 euler) {
+	float pitch = euler.x;
+	float yaw = euler.y;
+	float roll = euler.z;
+
+	// Abbreviations for the various angular functions
+	float cy = cos(pitch * 0.5f);
+	float sy = sin(pitch * 0.5f);
+	float cp = cos(roll * 0.5f);
+	float sp = sin(roll * 0.5f);
+	float cr = cos(yaw * 0.5f);
+	float sr = sin(yaw * 0.5f);
+
+	quat q;
+	q.w = cr * cp * cy + sr * sp * sy;
+	q.x = sr * cp * cy - cr * sp * sy;
+	q.y = cr * sp * cy + sr * cp * sy;
+	q.z = cr * cp * sy - sr * sp * cy;
+
+	return q;
 }
 
 mat4 CreatePerspectiveProjectionMatrix(float fov, float aspect, float nearPlane, float farPlane) {
@@ -600,6 +671,45 @@ mat4 CreatePerspectiveProjectionMatrix(float width, float height, float fx, floa
 	return result;
 }
 
+mat4 CreatePerspectiveProjectionMatrix(float r, float l, float t, float b, float nearPlane, float farPlane) {
+	mat4 result;
+	result.m00 = (2.f * nearPlane) / (r - l);
+	result.m01 = 0.f;
+	result.m02 = (r + l) / (r - l);
+	result.m03 = 0.f;
+
+	result.m10 = 0.f;
+	result.m11 = (2.f * nearPlane) / (t - b);
+	result.m12 = (t + b) / (t - b);
+	result.m13 = 0.f;
+
+	result.m20 = 0; result.m21 = 0;
+	if (farPlane > 0.f) {
+#if DIRECTX_COORDINATE_SYSTEM
+		result.m22 = -farPlane / (farPlane - nearPlane);
+		result.m23 = result.m22 * nearPlane;
+#else
+		result.m22 = -(farPlane + nearPlane) / (farPlane - nearPlane);
+		result.m23 = -2.f * farPlane * nearPlane / (farPlane - nearPlane);
+#endif
+	}
+	else {
+		result.m22 = -1.f;
+#if DIRECTX_COORDINATE_SYSTEM
+		result.m23 = -nearPlane;
+#else
+		result.m23 = -2.f * nearPlane;
+#endif
+	}
+
+	result.m30 = 0.f;
+	result.m31 = 0.f;
+	result.m32 = -1.f;
+	result.m33 = 0.f;
+
+	return result;
+}
+
 mat4 CreateOrthographicProjectionMatrix(float r, float l, float t, float b, float nearPlane, float farPlane) {
 	mat4 result;
 	result.m00 = 2.f / (r - l);
@@ -661,7 +771,7 @@ mat4 CreateModelMatrix(vec3 position, quat rotation, vec3 scale) {
 }
 
 mat4 trsToMat4(const trs& transform) {
-	return CreateModelMatrix(transform.position, transform.rotation, vec3(1.f, 1.f, 1.f) * transform.scale);
+	return CreateModelMatrix(transform.position, transform.rotation, transform.scale);
 }
 
 mat4 CreateViewMatrix(vec3 eye, float pitch, float yaw) {
@@ -700,6 +810,19 @@ mat4 LookAt(vec3 eye, vec3 target, vec3 up) {
 	result.m03 = -dot(xAxis, eye); result.m13 = -dot(yAxis, eye); result.m23 = -dot(zAxis, eye); result.m33 = 1.f;
 
 	return result;
+}
+
+quat LookAtQuaternion(vec3 forward, vec3 up) {
+	vec3 zAxis = -normalize(forward);
+	vec3 xAxis = normalize(cross(up, zAxis));
+	vec3 yAxis = normalize(cross(zAxis, xAxis));
+
+	mat3 m;
+	m.m00 = xAxis.x; m.m01 = yAxis.x; m.m02 = zAxis.x;
+	m.m10 = xAxis.y; m.m11 = yAxis.y; m.m12 = zAxis.y;
+	m.m20 = xAxis.z; m.m21 = yAxis.z; m.m22 = zAxis.z;
+
+	return mat3ToQuaternion(m);
 }
 
 mat4 CreateViewMatrix(vec3 position, quat rotation) {
@@ -847,45 +970,32 @@ bool InsideTriangle(vec3 barycentrics) {
 
 trs::trs(const mat4& m) {
 	vec3 c0(m.m00, m.m10, m.m20);
-	scale = sqrt(dot(c0, c0));
-	float invScale = 1.f / scale;
+	vec3 c1(m.m01, m.m11, m.m21);
+	vec3 c2(m.m02, m.m12, m.m22);
+	scale.x = sqrt(dot(c0, c0));
+	scale.y = sqrt(dot(c1, c1));
+	scale.z = sqrt(dot(c2, c2));
+
+
+	vec3 invScale = 1.f / scale;
 
 	position.x = m.m03;
 	position.y = m.m13;
 	position.z = m.m23;
 
-	mat4 R = m;
-	R.m03 = R.m13 = R.m23 = 0.f;
-	R = R * invScale;
+	mat3 R;
 
-	float tr = m.m00 + m.m11 + m.m22;
+	R.m00 = m.m00 * invScale.x;
+	R.m10 = m.m10 * invScale.x;
+	R.m20 = m.m20 * invScale.x;
 
-	if (tr > 0.f) {
-		float s = sqrtf(tr + 1.f) * 2.f; // S=4*qw 
-		rotation.w = 0.25f * s;
-		rotation.x = (R.m21 - R.m12) / s;
-		rotation.y = (R.m02 - R.m20) / s;
-		rotation.z = (R.m10 - R.m01) / s;
-	}
-	else if ((R.m00 > R.m11) && (R.m00 > R.m22)) {
-		float s = sqrtf(1.f + R.m00 - R.m11 - R.m22) * 2.f; // S=4*qx 
-		rotation.w = (R.m21 - R.m12) / s;
-		rotation.x = 0.25f * s;
-		rotation.y = (R.m01 + R.m10) / s;
-		rotation.z = (R.m02 + R.m20) / s;
-	}
-	else if (R.m11 > R.m22) {
-		float s = sqrtf(1.f + R.m11 - R.m00 - R.m22) * 2.f; // S=4*qy
-		rotation.w = (R.m02 - R.m20) / s;
-		rotation.x = (R.m01 + R.m10) / s;
-		rotation.y = 0.25f * s;
-		rotation.z = (R.m12 + R.m21) / s;
-	}
-	else {
-		float s = sqrtf(1.f + R.m22 - R.m00 - R.m11) * 2.f; // S=4*qz
-		rotation.w = (R.m10 - R.m01) / s;
-		rotation.x = (R.m02 + R.m20) / s;
-		rotation.y = (R.m12 + R.m21) / s;
-		rotation.z = 0.25f * s;
-	}
+	R.m01 = m.m01 * invScale.y;
+	R.m11 = m.m11 * invScale.y;
+	R.m21 = m.m21 * invScale.y;
+
+	R.m02 = m.m02 * invScale.z;
+	R.m12 = m.m12 * invScale.z;
+	R.m22 = m.m22 * invScale.z;
+
+	rotation = mat3ToQuaternion(R);
 }

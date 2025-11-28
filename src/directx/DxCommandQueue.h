@@ -5,7 +5,6 @@
 #include "mutex"
 
 class DxCommandList;
-class DxCommandAllocator;
 
 class DxCommandQueue {
 public:
@@ -16,27 +15,34 @@ public:
 
 	void Initialize(DxDevice device);
 
+	uint64 TimestampFrequency() const { return _timestampFrequency; }
+
 	uint64 Signal();
 	bool IsFenceComplete(uint64 fenceValue) const;
 	void WaitForFence(uint64 fenceValue) const;
 	void WaitForOtherQueue(DxCommandQueue& other) const;
 	void Flush();
 	void LeaveThread();
+
 	DxCommandList* GetFreeCommandList();
-	DxCommandAllocator* GetFreeCommandAllocator();
 	uint64 Execute(DxCommandList* commandList);
 
 private:
 	void ProcessRunningCommandAllocators();
 
-	DxCommandAllocator* _runningCommandAllocators = nullptr;
-	DxCommandAllocator* _freeCommandAllocators = nullptr;
-	volatile uint32 _numRunningCommandAllocators = 0;
+	uint64 _timestampFrequency; // In hz
+
+	DxCommandList* _runningCommandLists = nullptr;
 	DxCommandList* _freeCommandLists = nullptr;
 
-	std::mutex _mutex = {};
-	std::thread _freeAllocThread = {};
+	volatile uint32 _numRunningCommandLists;
+	volatile uint32 _totalNumCommandLists;
+
+	std::mutex _commandListMutex = {};
+	std::thread _processThread = {};
 
 	Com<ID3D12Fence> _fence = nullptr;
 	volatile uint64 _fenceValue = 0;
+
+	friend class DxContext;
 };

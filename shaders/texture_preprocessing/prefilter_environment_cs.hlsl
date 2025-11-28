@@ -13,7 +13,7 @@
 
 #include "../common/brdf.hlsli"
 #include "../common/math.hlsli"
-
+#include "../common/random.hlsli"
 #include "../common/cs.hlsli"
 
 cbuffer PrefilterEnvironmentCb : register(b0)
@@ -32,7 +32,7 @@ RWTexture2DArray<float4> DstMip3 : register(u2);
 RWTexture2DArray<float4> DstMip4 : register(u3);
 RWTexture2DArray<float4> DstMip5 : register(u4);
 
-SamplerState LinearSampler : register(s0);
+SamplerState LinearRepeatSampler : register(s0);
 
 // Transfrom from dispatch Id to cubemap face direction
 static const float3x3 RotateUV[6] = {
@@ -66,78 +66,79 @@ static float4 Filter(uint mip, float3 N, float3 V)
 {
     float roughness = float(mip) / (TotalNumMipLevels - 1);
 
-    const uint SAMPLE_COUNT = 1024u;
-    float TotalWeight = 0.f;
-    float3 PrefilteredColor = float3(0.f, 0.f, 0.f);
+	const uint SAMPLE_COUNT = 1024u;
+	float totalWeight = 0.f;
+	float3 prefilteredColor = float3(0.f, 0.f, 0.f);
 
-    uint width, height, numMipLevels;
-    SrcTexture.GetDimensions(0, width, height, numMipLevels);
 
-    for(uint i = 0u; i < SAMPLE_COUNT; i++) 
-    {
-        float2 Xi = Hammersley(i, SAMPLE_COUNT);
-        float3 H = ImportanceSampleGGX(Xi, N, roughness);
-        float3 L = normalize(2.f * dot(V, H) * H - V);
+	uint width, height, numMipLevels;
+	SrcTexture.GetDimensions(0, width, height, numMipLevels);
 
-        float NdotL = max(dot(N, L), 0.f);
-        float NdotH = max(dot(N, H), 0.f);
-        float HdotV = max(dot(H, V), 0.f);
-        if(NdotL > 0.f)
-        {
-            float D = DistributionGGX(N, H, roughness);
-            float pdf = (D * NdotH / (4.f * HdotV)) + 0.0001f;
+	for (uint i = 0; i < SAMPLE_COUNT; ++i)
+	{
+		float2 Xi = Hammersley(i, SAMPLE_COUNT);
+		float3 H = ImportanceSampleGGX(Xi, N, roughness).xyz;
+		float3 L = normalize(2.f * dot(V, H) * H - V);
 
-            uint resolution = width; // We expect quatratic faces, so width == height
-            float saTexel = 4.f * PI / (6.f * width * height);
-            float saSample = 1.f / (SAMPLE_COUNT * pdf + 0.00001f);
+		float NdotL = max(dot(N, L), 0.f);
+		float NdotH = max(dot(N, H), 0.f);
+		float HdotV = max(dot(H, V), 0.f);
+		if (NdotL > 0.f)
+		{
+			float D = DistributionGGX(NdotH, roughness);
+			float pdf = (D * NdotH / (4.f * HdotV)) + 0.0001f;
 
-            float sampleMipLevel = (roughness == 0.f) ? 0.f : 0.5f * log2(saSample / saTexel);
+			uint resolution = width; // We expect quadratic faces, so width == height.
+			float saTexel = 4.f * PI / (6.f * width * height);
+			float saSample = 1.f / (SAMPLE_COUNT * pdf + 0.00001f);
 
-            PrefilteredColor += SrcTexture.SampleLevel(LinearSampler, L, sampleMipLevel).xyz * NdotL;
-            TotalWeight += NdotL;
-        }
-    }
-    PrefilteredColor = PrefilteredColor / TotalWeight;
-    return float4(PrefilteredColor, 1.f);
+			float sampleMipLevel = (roughness == 0.f) ? 0.f : 0.5f * log2(saSample / saTexel);
+
+			prefilteredColor += SrcTexture.SampleLevel(LinearRepeatSampler, L, sampleMipLevel).xyz * NdotL;
+			totalWeight += NdotL;
+		}
+	}
+	prefilteredColor = prefilteredColor / totalWeight;
+	return float4(prefilteredColor, 1.f);
 }
 
 [RootSignature(RS)]
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(CsInput input) 
 {
-    // Cubemap texture coords
-    uint3 texCoord = input.DispatchThreadId;
+    // Cubemap texture coords.
+	uint3 texCoord = input.DispatchThreadId;
 
-    // First check if the thread is in the cubemap dimesions
-    if(texCoord.x >= CubemapSize || texCoord.y >= CubemapSize) 
-    {
-        return;
-    }
+	// First check if the thread is in the cubemap dimensions.
+	if (texCoord.x >= CubemapSize || texCoord.y >= CubemapSize) return;
 
-    // Map the UV coords of the cubemap face to a direction
-    // [(0, 0), (1, 1)] => [(-0.5, -0.5), (0.5, 0.5)]
-    float3 N = float3(texCoord.xy / float(CubemapSize) - 0.5f, 0.5f);
-    N = normalize(mul(RotateUV[texCoord.z], N));
+	// Map the UV coords of the cubemap face to a direction
+	// [(0, 0), (1, 1)] => [(-0.5, -0.5), (0.5, 0.5)]
+	float3 N = float3(texCoord.xy / float(CubemapSize) - 0.5f, 0.5f);
+	N = normalize(mul(RotateUV[texCoord.z], N));
 
-    float3 R = N;
-    float3 V = R;
+	float3 R = N;
+	float3 V = R;
 
-    DstMip1[texCoord] = Filter(FirstMip, N, V);
+	DstMip1[texCoord] = Filter(FirstMip, N, V);
 
-    if(NumMipLevels > 1 && (input.GroupIndex & 0x11) == 0)
-    {
-        DstMip2[uint3(texCoord.xy / 2, texCoord.z)] = Filter(FirstMip + 1, N, V);
-    }
-    if(NumMipLevels > 2 && (input.GroupIndex & 0x33) == 0)
-    {
-        DstMip2[uint3(texCoord.xy / 4, texCoord.z)] = Filter(FirstMip + 2, N, V);
-    }
-    if(NumMipLevels > 3 && (input.GroupIndex & 0x77) == 0)
-    {
-        DstMip2[uint3(texCoord.xy / 8, texCoord.z)] = Filter(FirstMip + 3, N, V);
-    }
-    if(NumMipLevels > 4 && (input.GroupIndex & 0xff) == 0)
-    {
-        DstMip2[uint3(texCoord.xy / 16, texCoord.z)] = Filter(FirstMip + 4, N, V);
-    }
+	if (NumMipLevels > 1 && (input.GroupIndex & 0x11) == 0)
+	{
+		DstMip2[uint3(texCoord.xy / 2, texCoord.z)] = Filter(FirstMip + 1, N, V);
+	}
+
+	if (NumMipLevels > 2 && (input.GroupIndex & 0x33) == 0)
+	{
+		DstMip3[uint3(texCoord.xy / 4, texCoord.z)] = Filter(FirstMip + 2, N, V);
+	}
+
+	if (NumMipLevels > 3 && (input.GroupIndex & 0x77) == 0)
+	{
+		DstMip4[uint3(texCoord.xy / 8, texCoord.z)] = Filter(FirstMip + 3, N, V);
+	}
+
+	if (NumMipLevels > 4 && (input.GroupIndex & 0xFF) == 0)
+	{
+		DstMip5[uint3(texCoord.xy / 16, texCoord.z)] = Filter(FirstMip + 4, N, V);
+	}
 }

@@ -20,49 +20,49 @@ RWTexture2D<float2> OutBRDF : register(u0);
 [numthreads(BLOCK_SIZE, BLOCK_SIZE, 1)]
 void main(CsInput input) 
 {
-    if(input.DispatchThreadId.x >= TextureDim || input.DispatchThreadId.y >= TextureDim)
-    {
-        return;
-    }
+    if (input.DispatchThreadId.x >= TextureDim || input.DispatchThreadId.y >= TextureDim)
+	{
+		return;
+	}
 
-    float NdotV = float(input.DispatchThreadId.x) / (TextureDim - 1);
-    float roughness = float(input.DispatchThreadId.y) / (TextureDim - 1);
+	float NdotV = float(input.DispatchThreadId.x) / (TextureDim - 1);
+	float roughness = float(input.DispatchThreadId.y) / (TextureDim - 1);
 
-    float3 V;
-    V.x = sqrt(1.f - NdotV * NdotV);
-    V.y = 0.f;
-    V.z = NdotV;
 
-    float A = 0.f;
-    float B = 0.f;
+	float3 V;
+	V.x = sqrt(1.f - NdotV * NdotV);
+	V.y = 0.f;
+	V.z = NdotV;
 
-    float3 N = float3(0.f, 0.f, 1.f);
+	float A = 0.f;
+	float B = 0.f;
 
-    const uint SAMPLE_COUNT = 1024u;
-    for(uint i = 0u; i < SAMPLE_COUNT; i++) 
-    {
-        float2 Xi = Hammersley(i, SAMPLE_COUNT);
-        float3 H = ImportanceSampleGGX(Xi, N, roughness);
-        float3 L = normalize(2.f * dot(V, H) * H - V);
+	float3 N = float3(0.f, 0.f, 1.f);
 
-        float NdotL = max(L.z, 0.f);
-        float NdotH = max(H.z, 0.f);
-        float VdotH = normalize(dot(V, H) * H - V);
+	const uint SAMPLE_COUNT = 1024u;
+	for (uint i = 0u; i < SAMPLE_COUNT; ++i)
+	{
+		float2 Xi = Hammersley(i, SAMPLE_COUNT);
+		float3 H = ImportanceSampleGGX(Xi, N, roughness).xyz;
+		float3 L = normalize(2.f * dot(V, H) * H - V);
 
-        if(NdotL) 
-        {
-            float G = GeometrySmith(N, V, L, roughness);
-            float GVis = (G * VdotH) / (NdotH * NdotV);
-            float Fc = pow(1.f - VdotH, 5.f);
+		float NdotL = max(L.z, 0.f);
+		float NdotH = max(H.z, 0.f);
+		float VdotH = max(dot(V, H), 0.f);
 
-            A += (1.f - Fc) * GVis;
-            B += Fc * GVis;
-        }
-    }
+		if (NdotL > 0.f)
+		{
+			float G = GeometrySmith(NdotL, NdotV, roughness);
+			float G_Vis = (G * VdotH) / (NdotH * NdotV);
+			float Fc = pow(1.f - VdotH, 5.f);
 
-    A /= float(SAMPLE_COUNT);
-    B /= float(SAMPLE_COUNT);
+			A += (1.f - Fc) * G_Vis;
+			B += Fc * G_Vis;
+		}
+	}
+	A /= float(SAMPLE_COUNT);
+	B /= float(SAMPLE_COUNT);
 
-    float2 integrateBRDF = float2(A, B);
-    OutBRDF[input.DispatchThreadId.xy] = integrateBRDF;
+	float2 integratedBRDF = float2(A, B);
+	OutBRDF[input.DispatchThreadId.xy] = integratedBRDF;
 }

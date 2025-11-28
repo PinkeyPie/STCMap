@@ -10,7 +10,37 @@
 
 
 #define CREATE_GRAPHICS_PIPELINE DxGraphicsPipelineGenerator()
-#define CREATE_COMPUTE_PIPELINE DxComputePipelineGenerator()
+
+#define UNBOUNDED_DESCRIPTOR_RANGE (-1)
+
+class DxRootSignature {
+public:
+	ID3D12RootSignature* RootSignature() const { return _rootSignature.Get(); }
+	uint32 NumDescriptorTables() const { return _numDescriptorTables; }
+	const uint32* DescriptorTableSize() const { return _descriptorTableSizes; }
+	uint32 TableRootParameterMask() const { return _tableRootParameterMask; }
+
+	void Initialize(DxBlob rootSignatureBlob);
+	void Initialize(const wchar* path);
+	void Initialize(const D3D12_ROOT_SIGNATURE_DESC1& desc);
+	void Initialize(CD3DX12_ROOT_PARAMETER1* rootParameters, uint32 numRootParameters, CD3DX12_STATIC_SAMPLER_DESC* samplers, uint32 numSamplers, D3D12_ROOT_SIGNATURE_FLAGS flags);
+	void Initialize(const D3D12_ROOT_SIGNATURE_DESC& desc);
+	void Initialize(CD3DX12_ROOT_PARAMETER* rootParameters, uint32 numRootParameters, CD3DX12_STATIC_SAMPLER_DESC* samplers, uint32 numSamplers, D3D12_ROOT_SIGNATURE_FLAGS flags);
+	void Initialize(D3D12_ROOT_SIGNATURE_FLAGS flags);
+
+	void Free();
+
+private:
+	void CopyRootSignatureDesc(const D3D12_ROOT_SIGNATURE_DESC* desc);
+	void CopyRootSignatureDesc(const D3D12_ROOT_SIGNATURE_DESC1* desc);
+
+	Com<ID3D12RootSignature> _rootSignature = nullptr;
+	uint32 _numDescriptorTables = 0;
+	uint32* _descriptorTableSizes = nullptr;
+	uint32 _tableRootParameterMask = 0;
+};
+
+DxCommandSignature CreateCommandSignature(DxRootSignature rootSignature, D3D12_INDIRECT_ARGUMENT_DESC* argumentDescs, uint32 numArgumentDescs, uint32 commandStructureSize);
 
 class DxGraphicsPipelineGenerator {
 public:
@@ -179,14 +209,18 @@ public:
 		return *this;
 	}
 
-	DxGraphicsPipelineGenerator& RenderTargets(DXGI_FORMAT* rtFormats, uint32 numRenderTargets, DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN) {
+	DxGraphicsPipelineGenerator RenderTargets(DXGI_FORMAT rtFormat, DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN) {
+		return RenderTargets(&rtFormat, 1, dsvFormat);
+	}
+
+	DxGraphicsPipelineGenerator& RenderTargets(const DXGI_FORMAT* rtFormats, uint32 numRenderTargets, DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN) {
 		memcpy(Desc.RTVFormats, rtFormats, sizeof(DXGI_FORMAT) * numRenderTargets);
 		Desc.NumRenderTargets = numRenderTargets;
 		Desc.DSVFormat = dsvFormat;
 		return *this;
 	}
 
-	DxGraphicsPipelineGenerator& RenderTargets(D3D12_RT_FORMAT_ARRAY& rtFormats, DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN) {
+	DxGraphicsPipelineGenerator& RenderTargets(const D3D12_RT_FORMAT_ARRAY& rtFormats, DXGI_FORMAT dsvFormat = DXGI_FORMAT_UNKNOWN) {
 		return RenderTargets(rtFormats.RTFormats, rtFormats.NumRenderTargets, dsvFormat);
 	}
 
@@ -196,33 +230,49 @@ public:
 	}
 };
 
-class DxComputePipelineGenerator {
+class RootDescriptorTable : public CD3DX12_ROOT_PARAMETER {
 public:
-	D3D12_COMPUTE_PIPELINE_STATE_DESC Desc;
-
-	operator const D3D12_COMPUTE_PIPELINE_STATE_DESC() const {
-		return Desc;
+	RootDescriptorTable(uint32 numDescriptorRanges, const D3D12_DESCRIPTOR_RANGE* descriptorRanges,
+		D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL) {
+		InitAsDescriptorTable(numDescriptorRanges, descriptorRanges, visibility);
 	}
+};
 
-	DxComputePipelineGenerator() {
-		Desc = {};
+template<class T>
+struct RootConstants : CD3DX12_ROOT_PARAMETER {
+	RootConstants(uint32 shaderRegister, uint32 space = 0, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL) {
+		InitAsConstants(sizeof(T) / 4, shaderRegister, space, visibility);
 	}
+};
 
-	DxPipelineState Create() {
-		DxPipelineState result;
-		ThrowIfFailed(DxContext::Instance().GetDevice()->CreateComputePipelineState(&Desc, IID_PPV_ARGS(result.GetAddressOf())));
-		return result;
+struct RootCBV : CD3DX12_ROOT_PARAMETER {
+	RootCBV(uint32 shaderRegister, uint32 space = 0, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL) {
+		InitAsConstantBufferView(shaderRegister, space, visibility);
 	}
+};
 
-	DxComputePipelineGenerator& RootSignature(const DxRootSignature& rootSignature) {
-		Desc.pRootSignature = rootSignature.RootSignature();
-		return *this;
+struct RootSRV : CD3DX12_ROOT_PARAMETER {
+	RootSRV(uint32 shaderRegister, uint32 space = 0, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL) {
+		InitAsShaderResourceView(shaderRegister, space, visibility);
 	}
+};
 
-	DxComputePipelineGenerator& Cs(DxBlob shader) {
-		Desc.CS = CD3DX12_SHADER_BYTECODE(shader.Get());
-		return *this;
+struct RootUAV : CD3DX12_ROOT_PARAMETER {
+	RootUAV(uint32 shaderRegister, uint32 space = 0, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL) {
+		InitAsUnorderedAccessView(shaderRegister, space, visibility);
 	}
+};
+
+struct DxPipelineStreamBase {
+	virtual void SetVertexShader(DxBlob blob) {}
+	virtual void SetHullShader(DxBlob blob) {}
+	virtual void SetDomainShader(DxBlob blob) {}
+	virtual void SetGeometryShader(DxBlob blob) {}
+	virtual void SetPixelShader(DxBlob blob) {}
+	virtual void SetAmplificationShader(DxBlob blob) {}
+	virtual void SetMeshShader(DxBlob blob) {}
+
+	virtual void SetRootSignature(DxRootSignature rs) = 0;
 };
 
 class DxPipeline {
@@ -231,12 +281,27 @@ public:
 	DxRootSignature* RootSignature;
 };
 
-struct GraphicsPipelineFiles {
-	const char* Vs = nullptr;
-	const char* Ps = nullptr;
-	const char* Ds = nullptr;
-	const char* Hs = nullptr;
-	const char* Gs = nullptr;
+union GraphicsPipelineFiles {
+	struct {
+		const char* VS;
+		const char* PS;
+		const char* DS;
+		const char* HS;
+		const char* GS;
+		const char* AS;
+		const char* MS;
+	};
+	const char* shaders[7] = {};
+};
+
+enum ERsFile {
+	ERsInVertexShader,
+	ERsInPixelShader,
+	ERsInDomainShader,
+	ERsInHullShader,
+	ERsInGeometryShader,
+	ERsInAmplificationShader,
+	ERsInMeshShader
 };
 
 class DxPipelineFactory {
@@ -247,16 +312,55 @@ public:
 		return _instance;
 	}
 
-	void CreateAllReloadablePipelines();
+	void CreateAllPendingReloadablePipelines();
 	void CheckForChangedPipelines();
 	DxPipeline CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files,
 		DxRootSignature userRootSignature);
 	DxPipeline CreateReloadablePipeline(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files,
-		const char* rootSignatureFile = nullptr); // If RS file is null, it will take the pixel shader by default
+		ERsFile rootSignatureFile = ERsInPixelShader); // If RS file is null, it will take the pixel shader by default
 
 	DxPipeline CreateReloadablePipeline(const char* csFile, DxRootSignature userRootSignature);
-	DxPipeline CreateReloadablePipeline(const char* csFile, const char* rootSignatureFile = nullptr); // If RS file is null, it will take the cs by default.
+	DxPipeline CreateReloadablePipeline(const char* csFile); // If RS file is null, it will take the cs by default.
+
+	template<class StreamT>
+	inline DxPipeline CreateReloadablePipelineFromStream(const StreamT& stream, const GraphicsPipelineFiles& files, DxRootSignature userRootSignature) {
+		static_assert(std::is_base_of_v<DxPipelineStreamBase, StreamT>, "Stream must inherit from dx_pipeline_stream_base");
+
+		StreamT* streamCopy = new StreamT(stream); // Dynamically allocated for permanent storage.
+		D3D12_PIPELINE_STATE_STREAM_DESC desc = {
+			sizeof(StreamT) - 8, (uint8*)streamCopy + 8 // Offset for vTable. This seems very broken. TODO: Verify that this always works.
+		};
+
+		return CreateReloadablePipeline(desc, streamCopy, files, userRootSignature);
+	}
+
+	template<class StreamT>
+	inline DxPipeline CreateReloadablePipelineFromStream(const StreamT& stream, const GraphicsPipelineFiles& files, ERsFile rootSignatureFile = ERsInPixelShader) {
+		static_assert(std::is_base_of_v<DxPipelineStreamBase, StreamT>, "Stream must inherit from dx_pipeline_stream_base");
+
+		StreamT* streamCopy = new StreamT(stream); // Dynamically allocated for permanent storage.
+		D3D12_PIPELINE_STATE_STREAM_DESC desc = {
+			sizeof(StreamT) - 8, (uint8*)streamCopy + 8 // Offset for vTable. This seems very broken. TODO: Verify that this always works.
+		};
+
+		return CreateReloadablePipeline(desc, streamCopy, files, rootSignatureFile);
+	}
 private:
+	DxPipeline CreateReloadablePipeline(const D3D12_PIPELINE_STATE_STREAM_DESC& desc, DxPipelineStreamBase* stream, const GraphicsPipelineFiles& files, DxRootSignature userRootSignature);
+	DxPipeline CreateReloadablePipeline(const D3D12_PIPELINE_STATE_STREAM_DESC& desc, DxPipelineStreamBase* stream, const GraphicsPipelineFiles& files, ERsFile rootSignatureFile);
+
+	enum DescType {
+		EDescTypeStruct,
+		EDescTypeStream
+	};
+
+	union GraphicsPipelineDesc {
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC structDesc;
+		D3D12_PIPELINE_STATE_STREAM_DESC streamDesc;
+
+		GraphicsPipelineDesc() = default;
+	};
+
 	enum PipelineType {
 		EPipelineTypeGraphics,
 		EPipelineTypeCompute
@@ -264,10 +368,15 @@ private:
 
 	struct ReloadablePipelineState {
 		PipelineType Type = EPipelineTypeGraphics;
+		DescType DescriptionType = EDescTypeStruct;
 
 		union {
 			struct {
 				D3D12_GRAPHICS_PIPELINE_STATE_DESC GraphicsDesc;
+
+				D3D12_PIPELINE_STATE_STREAM_DESC StreamDesc;
+				DxPipelineStreamBase* Stream;
+
 				GraphicsPipelineFiles GraphicsFiles;
 			};
 
@@ -278,7 +387,7 @@ private:
 		};
 
 		DxPipelineState Pipeline = nullptr;
-		DxRootSignature* RootSignature = nullptr;
+		DxRootSignature* RootSignature;
 		bool UserRootSignature = false;
 
 		D3D12_INPUT_ELEMENT_DESC InputLayout[16] = {};
@@ -286,12 +395,13 @@ private:
 		ReloadablePipelineState() {}
 
 		void Initialize(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc, const GraphicsPipelineFiles& files, DxRootSignature* rootSignature);
+		void Initialize(const D3D12_PIPELINE_STATE_STREAM_DESC& desc, DxPipelineStreamBase* stream, const GraphicsPipelineFiles& files, DxRootSignature* rootSignature);
 		void Initialize(const char* file, DxRootSignature* rootSignature);
 	};
 
 	struct ReloadableRootSignature {
 		const char* File;
-		DxRootSignature* RootSignature;
+		DxRootSignature RootSignature;
 	};
 
 	struct ShaderFile {
@@ -309,9 +419,10 @@ private:
 	static DxPipelineFactory* _instance;
 
 	std::unordered_map<std::string, ShaderFile> _shaderBlobs = {};
-	std::deque<ReloadablePipelineState> _pipelines = {};
-	std::deque<ReloadableRootSignature> _rootSignatureFromFiles = {};
-	std::deque<DxRootSignature> _userRootSignatures = {};
+	std::deque<ReloadablePipelineState> _pipelines = {}; // All psos
+
+	std::deque<ReloadableRootSignature> _rootSignatureFromFiles = {}; // Root signatures will lay either here
+	std::deque<DxRootSignature> _userRootSignatures = {}; // Or here
 
 	std::vector<ReloadablePipelineState*> _dirtyPipelines = {};
 	std::vector<ReloadableRootSignature*> _dirtyRootSignatures = {};

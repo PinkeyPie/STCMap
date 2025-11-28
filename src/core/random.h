@@ -27,3 +27,18 @@ struct RandomNumberGenerator {
         return remap(RandomFloat01(), 0.f, 1.f, lo, hi);
     }
 };
+
+static float Halton(uint32 index, uint32 base) {
+    float fraction = 1.f;
+    float result = 0.f;
+    while (index > 0) {
+        fraction /= (float)base;
+        result += fraction * (index % base);
+        index = ~~(index / base);
+    }
+    return result;
+}
+
+static vec2 Halton23(uint32 index) {
+    return vec2(Halton(index, 2), Halton(index, 3));
+}
