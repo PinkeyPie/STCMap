@@ -34,31 +34,29 @@ public:
 	DxTexture(DxResource resource, CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle = {});
 	virtual ~DxTexture();
 
+	DxResource Resource;
+	uint32 Width, Height, Depth;
+	DXGI_FORMAT Format;
+
+	DxCpuDescriptorHandle DefaultSRV; // SRV for the whole texture (all mip levels).
+	DxCpuDescriptorHandle DefaultUAV; // UAV for the first mip level
+	DxCpuDescriptorHandle StencilSRV; // For depth stencil textures.
+	DxRtvDescriptorHandle RtvHandles;
+	DxDsvDescriptorHandle DsvHandle;
+
+	bool SupportsRTV;
+	bool SupportsDSV;
+	bool SupportsUAV;
+	bool SupportsSRV;
+
+	uint32 NumMipLevels;
+	std::vector<DxCpuDescriptorHandle> MipUAVs;
+
 	void SetName(const wchar* name);
 	std::wstring GetName() const;
 
 	void Resize(uint32 newWidth, uint32 newHeight, D3D12_RESOURCE_STATES initialState = (D3D12_RESOURCE_STATES)-1);
 	void AllocateMipUAVs();
-
-	ID3D12Resource* Resource() const { return _resource.Get(); }
-	void SetResource(const DxResource &resource) { _resource = resource; }
-	const DxCpuDescriptorHandle& DefaultSRV() const  { return _defaultSRV; }
-	const DxCpuDescriptorHandle& DefaultUAV() const { return _defaultUAV; }
-	const DxCpuDescriptorHandle& StencilSRV() const { return _stencilSRV; }
-	const DxRtvDescriptorHandle& RTVHandles() const { return _rtvHandles; }
-	const DxDsvDescriptorHandle& DSVHandles() const { return _dsvHandle; }
-	DXGI_FORMAT Format() const { return _format; }
-	bool SupportsRTV() const { return _supportsRTV; }
-	bool SupportsDSV() const { return _supportsDSV; }
-	bool SupportsUAV() const { return _supportsUAV; }
-	bool SupportsSRV() const { return _supportsSRV; }
-	uint32 NumMipLevels() const { return _numMipLevels; }
-	const std::vector<DxCpuDescriptorHandle>& MipUAVs() const { return _mipUAVs; }
-	std::vector<DxCpuDescriptorHandle>& MipUAVs() { return _mipUAVs; }
-
-	uint32 Width() const { return _width; }
-	uint32 Height() const { return _height; }
-	uint32 Depth() const { return _depth; }
 
 	static bool IsUAVCompatibleFormat(DXGI_FORMAT format);
 	static bool IsSRGBFormat(DXGI_FORMAT format);
@@ -77,28 +75,9 @@ private:
 	void UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, uint32 firstSubresource, uint32 numSubresources);
 	void Update(const char* filename, uint32 flags);
 
-	DxResource _resource;
-
-	uint32 _width, _height, _depth;
-	DXGI_FORMAT _format;
 	D3D12_FEATURE_DATA_FORMAT_SUPPORT _formatSupport;
 	D3D12_RESOURCE_STATES _initialState;
 	uint32 _requestedNumMipLevels;
-	uint32 _numMipLevels;
-
-	DxCpuDescriptorHandle _defaultSRV; // SRV for the whole texture (all mip levels).
-	DxCpuDescriptorHandle _defaultUAV; // UAV for the first mip level
-	DxCpuDescriptorHandle _stencilSRV; // For depth stencil textures.
-
-	DxRtvDescriptorHandle _rtvHandles;
-	DxDsvDescriptorHandle _dsvHandle;
-
-	std::vector<DxCpuDescriptorHandle> _mipUAVs;
-
-	bool _supportsRTV;
-	bool _supportsDSV;
-	bool _supportsUAV;
-	bool _supportsSRV;
 
 	friend class DxDescriptorRange;
 	friend class TextureFactory;
@@ -129,13 +108,9 @@ class TextureFactory {
 public:
 	static TextureFactory* Instance() { return _instance; }
 
-	Ptr<DxTexture> CreateTexture(D3D12_RESOURCE_DESC textureDesc, D3D12_SUBRESOURCE_DATA *subresourceData,
-						uint32 numSubresources, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
-	Ptr<DxTexture> CreateTexture(const void *data, uint32 width, uint32 height, DXGI_FORMAT format,
-						 bool allocateMips = false, bool allowRenderTarget = false,  bool allowUnorderedAccess = false,
-						 D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
-	Ptr<DxTexture> CreateDepthTexture(uint32 width, uint32 height, DXGI_FORMAT format, uint32 arrayLength = 1,
-							D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	Ptr<DxTexture> CreateTexture(D3D12_RESOURCE_DESC textureDesc, D3D12_SUBRESOURCE_DATA *subresourceData, uint32 numSubresources, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
+	Ptr<DxTexture> CreateTexture(const void *data, uint32 width, uint32 height, DXGI_FORMAT format, bool allocateMips = false, bool allowRenderTarget = false,  bool allowUnorderedAccess = false, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
+	Ptr<DxTexture> CreateDepthTexture(uint32 width, uint32 height, DXGI_FORMAT format, uint32 arrayLength = 1, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_DEPTH_WRITE);
 	Ptr<DxTexture> CreateCubeTexture(const void* data, uint32 width, uint32 height, uint32 depth, DXGI_FORMAT format, bool allocateMips = false, bool allowRenderTarget = false, bool allowUnorderedAccess = false, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
 	Ptr<DxTexture> CreateVolumeTexture(const void* data, uint32 width, uint32 height, uint32 depth, DXGI_FORMAT format, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON);
 

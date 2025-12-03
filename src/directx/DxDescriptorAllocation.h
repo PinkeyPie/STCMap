@@ -16,7 +16,7 @@ public:
     DxDescriptorHeap() = default;
     DescriptorT GetFreeHandle();
     void FreeHandle(DescriptorT handle);
-    ID3D12DescriptorHeap* DescriptorHeap() { return _descriptorHeap.Get(); }
+    ID3D12DescriptorHeap* DescriptorHeap() const { return _descriptorHeap.Get(); }
 
     DxGpuDescriptorHandle GetMatchingGpuHandle(DxCpuDescriptorHandle handle);
     DxCpuDescriptorHandle GetMatchingCpuHandle(DxGpuDescriptorHandle handle);
@@ -132,7 +132,7 @@ DescriptorT DxDescriptorHeap<DescriptorT>::GetFreeHandle() {
         _freeDescriptors.pop_back();
     }
     else {
-        index = _allFreeIncludingAndAfter++;
+        index = AtomicAdd(_allFreeIncludingAndAfter, 1);
     }
     return { CD3DX12_CPU_DESCRIPTOR_HANDLE(_cpuBase, index, _descriptorHandleIncrementSize)};
 }

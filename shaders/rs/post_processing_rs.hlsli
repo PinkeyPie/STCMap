@@ -240,6 +240,12 @@ struct PresentCb
 
 #define PRESENT_RS \
 "RootFlags(0), " \
+"StaticSampler(s0," \
+"              addressU = TEXTURE_ADDRESS_BORDER," \
+"              addressV = TEXTURE_ADDRESS_BORDER," \
+"              addressW = TEXTURE_ADDRESS_BORDER," \
+"              filter = FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT," \
+"              visibility=SHADER_VISIBILITY_PIXEL)," \
 "RootConstants(num32BitConstants=4, b0),"  \
 "DescriptorTable( UAV(u0, numDescriptors = 1), SRV(t0, numDescriptors = 1) )"
 

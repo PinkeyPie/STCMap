@@ -6,33 +6,33 @@
 
 DxCpuDescriptorHandle &DxCpuDescriptorHandle::Create2DTextureSRV(const DxTexture *texture, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? texture->Resource()->GetDesc().Format : overrideFormat;
+    srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? texture->Resource->GetDesc().Format : overrideFormat;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MostDetailedMip = mipRange.First;
     srvDesc.Texture2D.MipLevels = mipRange.Count;
 
-    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource(), &srvDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource.Get(), &srvDesc, CpuHandle);
 
     return *this;
 }
 
 DxCpuDescriptorHandle &DxCpuDescriptorHandle::CreateCubemapSRV(const DxTexture *texture, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? texture->Resource()->GetDesc().Format : overrideFormat;
+    srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? texture->Resource->GetDesc().Format : overrideFormat;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
     srvDesc.TextureCube.MostDetailedMip = mipRange.First;
     srvDesc.TextureCube.MipLevels = mipRange.Count;
 
-    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource(), &srvDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource.Get(), &srvDesc, CpuHandle);
 
     return *this;
 }
 
 DxCpuDescriptorHandle &DxCpuDescriptorHandle::CreateCubemapArraySRV(const DxTexture *texture, TextureMipRange mipRange, uint32 firstCube, uint32 numCubes, DXGI_FORMAT overrideFormat) {
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? texture->Resource()->GetDesc().Format : overrideFormat;
+    srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? texture->Resource->GetDesc().Format : overrideFormat;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
     srvDesc.TextureCubeArray.MostDetailedMip = mipRange.First;
@@ -40,60 +40,60 @@ DxCpuDescriptorHandle &DxCpuDescriptorHandle::CreateCubemapArraySRV(const DxText
     srvDesc.TextureCubeArray.NumCubes = numCubes;
     srvDesc.TextureCubeArray.First2DArrayFace = firstCube * 6;
 
-    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource(), &srvDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource.Get(), &srvDesc, CpuHandle);
 
     return *this;
 }
 
 DxCpuDescriptorHandle &DxCpuDescriptorHandle::CreateVolumeTextureSRV(const DxTexture *texture, TextureMipRange mipRange, DXGI_FORMAT overrideFormat) {
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? texture->Resource()->GetDesc().Format : overrideFormat;
+    srvDesc.Format = (overrideFormat == DXGI_FORMAT_UNKNOWN) ? texture->Resource->GetDesc().Format : overrideFormat;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
     srvDesc.Texture3D.MostDetailedMip = mipRange.First;
     srvDesc.Texture3D.MipLevels = mipRange.Count;
     srvDesc.Texture3D.ResourceMinLODClamp = 0;
 
-    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource(), &srvDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource.Get(), &srvDesc, CpuHandle);
 
     return *this;
 }
 
 DxCpuDescriptorHandle &DxCpuDescriptorHandle::CreateDepthTextureSRV(const DxTexture *texture) {
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = DxTexture::GetDepthReadFormat(texture->Format());
+    srvDesc.Format = DxTexture::GetDepthReadFormat(texture->Format);
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
 
-    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource(), &srvDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource.Get(), &srvDesc, CpuHandle);
 
     return *this;
 }
 
 DxCpuDescriptorHandle &DxCpuDescriptorHandle::CreateDepthTextureArraySRV(const DxTexture *texture) {
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = DxTexture::GetDepthReadFormat(texture->Format());
+    srvDesc.Format = DxTexture::GetDepthReadFormat(texture->Format);
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
     srvDesc.Texture2DArray.MipLevels = 1;
     srvDesc.Texture2DArray.FirstArraySlice = 0;
-    srvDesc.Texture2DArray.ArraySize = texture->Resource()->GetDesc().DepthOrArraySize;
+    srvDesc.Texture2DArray.ArraySize = texture->Resource->GetDesc().DepthOrArraySize;
 
-    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource(), &srvDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource.Get(), &srvDesc, CpuHandle);
 
     return *this;
 }
 
 DxCpuDescriptorHandle &DxCpuDescriptorHandle::CreateStencilTextureSRV(const DxTexture *texture) {
     D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-    srvDesc.Format = DxTexture::GetStencilReadFormat(texture->Format());
+    srvDesc.Format = DxTexture::GetStencilReadFormat(texture->Format);
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     srvDesc.Texture2D.MipLevels = 1;
     srvDesc.Texture2D.PlaneSlice = 1;
 
-    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource(), &srvDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateShaderResourceView(texture->Resource.Get(), &srvDesc, CpuHandle);
 
     return *this;
 }
@@ -167,7 +167,7 @@ DxCpuDescriptorHandle &DxCpuDescriptorHandle::Create2DTextureUAV(const DxTexture
     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
     uavDesc.Format = overrideFormat;
     uavDesc.Texture2D.MipSlice = mipSlice;
-    DxContext::Instance().GetDevice()->CreateUnorderedAccessView(texture->Resource(), nullptr, &uavDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateUnorderedAccessView(texture->Resource.Get(), nullptr, &uavDesc, CpuHandle);
 
     return *this;
 }
@@ -177,9 +177,9 @@ DxCpuDescriptorHandle &DxCpuDescriptorHandle::Create2DTextureArrayUAV(const DxTe
     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
     uavDesc.Format = overrideFormat;
     uavDesc.Texture2DArray.FirstArraySlice = 0;
-    uavDesc.Texture2DArray.ArraySize = texture->Resource()->GetDesc().DepthOrArraySize;
+    uavDesc.Texture2DArray.ArraySize = texture->Resource->GetDesc().DepthOrArraySize;
     uavDesc.Texture2DArray.MipSlice = mipSlice;
-    DxContext::Instance().GetDevice()->CreateUnorderedAccessView(texture->Resource(), nullptr, &uavDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateUnorderedAccessView(texture->Resource.Get(), nullptr, &uavDesc, CpuHandle);
 
     return *this;
 }
@@ -189,9 +189,9 @@ DxCpuDescriptorHandle &DxCpuDescriptorHandle::CreateCubemapUAV(const DxTexture *
     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
     uavDesc.Format = overrideFormat;
     uavDesc.Texture2DArray.FirstArraySlice = 0;
-    uavDesc.Texture2DArray.ArraySize = texture->Resource()->GetDesc().DepthOrArraySize;
+    uavDesc.Texture2DArray.ArraySize = texture->Resource->GetDesc().DepthOrArraySize;
     uavDesc.Texture2DArray.MipSlice = mipSlice;
-    DxContext::Instance().GetDevice()->CreateUnorderedAccessView(texture->Resource(), nullptr, &uavDesc, CpuHandle);
+    DxContext::Instance().GetDevice()->CreateUnorderedAccessView(texture->Resource.Get(), nullptr, &uavDesc, CpuHandle);
 
     return *this;
 }
@@ -202,8 +202,8 @@ DxCpuDescriptorHandle &DxCpuDescriptorHandle::CreateVolumeTextureUAV(const DxTex
     uavDesc.Format = overrideFormat;
     uavDesc.Texture3D.MipSlice = mipSlice;
     uavDesc.Texture3D.FirstWSlice = 0;
-    uavDesc.Texture3D.WSize = texture->Depth();
-    DxContext::Instance().GetDevice()->CreateUnorderedAccessView(texture->Resource(), nullptr, &uavDesc, CpuHandle);
+    uavDesc.Texture3D.WSize = texture->Depth;
+    DxContext::Instance().GetDevice()->CreateUnorderedAccessView(texture->Resource.Get(), nullptr, &uavDesc, CpuHandle);
 
     return *this;
 }
@@ -315,19 +315,19 @@ DxGpuDescriptorHandle DxGpuDescriptorHandle::operator++(int) {
 }
 
 DxRtvDescriptorHandle &DxRtvDescriptorHandle::Create2DTextureRTV(const DxTexture *texture, uint32 arraySlice, uint32 mipSlice) {
-    assert(texture->SupportsRTV());
+    assert(texture->SupportsRTV);
     DxContext& context = DxContext::Instance();
 
     D3D12_RENDER_TARGET_VIEW_DESC rtvDesc;
     rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-    rtvDesc.Format = texture->Format();
+    rtvDesc.Format = texture->Format;
 
-    if (texture->Depth() == 1) {
+    if (texture->Depth == 1) {
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
         rtvDesc.Texture2D.MipSlice = mipSlice;
         rtvDesc.Texture2D.PlaneSlice = 0;
 
-        context.GetDevice()->CreateRenderTargetView(texture->Resource(), &rtvDesc, CpuHandle);
+        context.GetDevice()->CreateRenderTargetView(texture->Resource.Get(), &rtvDesc, CpuHandle);
     }
     else {
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
@@ -336,25 +336,25 @@ DxRtvDescriptorHandle &DxRtvDescriptorHandle::Create2DTextureRTV(const DxTexture
         rtvDesc.Texture2DArray.MipSlice = mipSlice;
         rtvDesc.Texture2DArray.PlaneSlice = 0;
 
-        context.GetDevice()->CreateRenderTargetView(texture->Resource(), &rtvDesc, CpuHandle);
+        context.GetDevice()->CreateRenderTargetView(texture->Resource.Get(), &rtvDesc, CpuHandle);
     }
 
     return *this;
 }
 
 DxDsvDescriptorHandle &DxDsvDescriptorHandle::Create2DTextureDSV(const DxTexture *texture, uint32 arraySlice, uint32 mipSlice) {
-    assert(texture->SupportsDSV());
-    assert(DxTexture::IsDepthFormat(texture->Format()));
+    assert(texture->SupportsDSV);
+    assert(DxTexture::IsDepthFormat(texture->Format));
     DxContext& context = DxContext::Instance();
 
     D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-    dsvDesc.Format = texture->Format();
+    dsvDesc.Format = texture->Format;
 
-    if (texture->Depth() == 1) {
+    if (texture->Depth == 1) {
         dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
         dsvDesc.Texture2D.MipSlice = mipSlice;
 
-        context.GetDevice()->CreateDepthStencilView(texture->Resource(), &dsvDesc, CpuHandle);
+        context.GetDevice()->CreateDepthStencilView(texture->Resource.Get(), &dsvDesc, CpuHandle);
     }
     else {
         dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
@@ -362,7 +362,7 @@ DxDsvDescriptorHandle &DxDsvDescriptorHandle::Create2DTextureDSV(const DxTexture
         dsvDesc.Texture2DArray.ArraySize = 1;
         dsvDesc.Texture2DArray.MipSlice = mipSlice;
 
-        context.GetDevice()->CreateDepthStencilView(texture->Resource(), &dsvDesc, CpuHandle);
+        context.GetDevice()->CreateDepthStencilView(texture->Resource.Get(), &dsvDesc, CpuHandle);
     }
 
     return *this;

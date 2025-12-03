@@ -54,6 +54,8 @@ private:
 
 	static Application* _instance;
 	bool _running = false;
+	DxCpuDescriptorHandle _nullTextureUAV;
+	DxPipeline _presentPipeline;
 
 	RaytracingTlas _raytracingTlas;
 	PathTracer _pathTracer;

@@ -51,7 +51,7 @@ void TexturePreprocessor::Initialize() {
 void TexturePreprocessor::GenerateMipMapsOnGPU(DxCommandList *cl, Ptr<DxTexture> &texture) {
     DxContext& dxContext = DxContext::Instance();
 
-    DxResource resource = texture->Resource();
+    DxResource resource = texture->Resource;
     if (not resource) {
         return;
     }
@@ -73,7 +73,7 @@ void TexturePreprocessor::GenerateMipMapsOnGPU(DxCommandList *cl, Ptr<DxTexture>
     DxResource uavResource = resource;
     DxResource aliasResource; // In case the format of our texture doesn't support UAVs
 
-    if (not texture->SupportsUAV() or (resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0) {
+    if (not texture->SupportsUAV or (resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0) {
         D3D12_RESOURCE_DESC aliasDesc = resourceDesc;
         // Placed resources can't be render targets or depth-stencil views.
         aliasDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
@@ -148,7 +148,7 @@ void TexturePreprocessor::GenerateMipMapsOnGPU(DxCommandList *cl, Ptr<DxTexture>
     DXGI_FORMAT overrideFormat = isSRGB ? DxTexture::GetSRGBFormat(resourceDesc.Format) : resourceDesc.Format;
 
     Ptr<DxTexture> tmpTexture = MakePtr<DxTexture>();
-    tmpTexture->SetResource(uavResource.Get());
+    tmpTexture->Resource = uavResource;
 
     uint32 numSrcMipLevels = resourceDesc.MipLevels - 1;
     uint32 numDstMipLevels = resourceDesc.MipLevels - 1;
@@ -237,11 +237,11 @@ void TexturePreprocessor::GenerateMipMapsOnGPU(DxCommandList *cl, Ptr<DxTexture>
 }
 
 Ptr<DxTexture> TexturePreprocessor::EquirectangularToCubemap(DxCommandList *cl, const Ptr<DxTexture> &equirectangular, uint32 resolution, uint32 numMips, DXGI_FORMAT format) {
-    assert(equirectangular->Resource());
+    assert(equirectangular->Resource);
 
     DxContext& dxContext = DxContext::Instance();
 
-    CD3DX12_RESOURCE_DESC cubemapDesc(equirectangular->Resource()->GetDesc());
+    CD3DX12_RESOURCE_DESC cubemapDesc(equirectangular->Resource->GetDesc());
     cubemapDesc.Width = cubemapDesc.Height = resolution;
     cubemapDesc.DepthOrArraySize = 6;
     cubemapDesc.MipLevels = numMips;
@@ -254,15 +254,15 @@ Ptr<DxTexture> TexturePreprocessor::EquirectangularToCubemap(DxCommandList *cl, 
 
     Ptr<DxTexture> cubemap = TextureFactory::Instance()->CreateTexture(cubemapDesc, nullptr, 0);
 
-    cubemapDesc = CD3DX12_RESOURCE_DESC(cubemap->Resource()->GetDesc());
+    cubemapDesc = CD3DX12_RESOURCE_DESC(cubemap->Resource->GetDesc());
     numMips = cubemapDesc.MipLevels;
 
-    DxResource cubemapResource = cubemap->Resource();
+    DxResource cubemapResource = cubemap->Resource;
     SET_NAME(cubemapResource, "Cubemap");
     DxResource stagingResource = cubemapResource;
 
     Ptr<DxTexture> stagingTexture = MakePtr<DxTexture>();
-    stagingTexture->SetResource(cubemap->Resource());
+    stagingTexture->Resource = cubemap->Resource;
 
     if ((cubemapDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0) {
         CD3DX12_RESOURCE_DESC stagingDesc = cubemapDesc;
@@ -280,7 +280,7 @@ Ptr<DxTexture> TexturePreprocessor::EquirectangularToCubemap(DxCommandList *cl, 
         ));
 
         SET_NAME(stagingResource, "Staging resource for equirectangular to cubemap");
-        stagingTexture->SetResource(stagingResource);
+        stagingTexture->Resource = stagingResource;
     }
 
     cl->SetPipelineState(*_equirectangularToCubemapPipeline.Pipeline);
@@ -324,22 +324,22 @@ Ptr<DxTexture> TexturePreprocessor::EquirectangularToCubemap(DxCommandList *cl, 
 
     cl->UavBarrier(stagingResource);
     if (stagingResource != cubemapResource) {
-        cl->CopyResource(stagingTexture->Resource(), cubemap->Resource());
-        cl->TransitionBarrier(cubemap->Resource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
+        cl->CopyResource(stagingTexture->Resource, cubemap->Resource);
+        cl->TransitionBarrier(cubemap->Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
     }
 
-    dxContext.Retire(stagingTexture->Resource());
+    dxContext.Retire(stagingTexture->Resource);
 
     return cubemap;
 }
 
 Ptr<DxTexture> TexturePreprocessor::CubemapToIrradiance(DxCommandList *cl, const Ptr<DxTexture> &environment,
                                                         uint32 resolution, uint32 sourceSlice, float uvzScale) {
-    assert(environment->Resource());
+    assert(environment->Resource);
 
     DxContext& dxContext = DxContext::Instance();
     TextureFactory* textureFactory = TextureFactory::Instance();
-    CD3DX12_RESOURCE_DESC irradianceDesc(environment->Resource()->GetDesc());
+    CD3DX12_RESOURCE_DESC irradianceDesc(environment->Resource->GetDesc());
 
     if (DxTexture::IsSRGBFormat(irradianceDesc.Format)) {
         printf("Warning: Irradiance of SRGB-Format!\n");
@@ -355,14 +355,14 @@ Ptr<DxTexture> TexturePreprocessor::CubemapToIrradiance(DxCommandList *cl, const
 
     Ptr<DxTexture> irradiance = textureFactory->CreateTexture(irradianceDesc, 0, 0);
 
-    irradianceDesc = CD3DX12_RESOURCE_DESC(irradiance->Resource()->GetDesc());
+    irradianceDesc = CD3DX12_RESOURCE_DESC(irradiance->Resource->GetDesc());
 
-    DxResource irradianceResource = irradiance->Resource();
+    DxResource irradianceResource = irradiance->Resource;
     SET_NAME(irradianceResource, "Irradiance");
     DxResource stagingResource = irradianceResource;
 
     Ptr<DxTexture> stagingTexture =  MakePtr<DxTexture>();
-    stagingTexture->SetResource(irradiance->Resource());
+    stagingTexture->Resource = irradiance->Resource;
 
     if ((irradianceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0) {
         CD3DX12_RESOURCE_DESC stagingDesc = irradianceDesc;
@@ -380,7 +380,7 @@ Ptr<DxTexture> TexturePreprocessor::CubemapToIrradiance(DxCommandList *cl, const
         ));
         SET_NAME(stagingResource, "Staging resource for cubemap to irradiance");
 
-        stagingTexture->SetResource(stagingResource);
+        stagingTexture->Resource = stagingResource;
     }
 
     cl->SetPipelineState(*_cubemapToIrradiancePipeline.Pipeline);
@@ -413,21 +413,21 @@ Ptr<DxTexture> TexturePreprocessor::CubemapToIrradiance(DxCommandList *cl, const
 
     cl->UavBarrier(stagingResource);
     if (stagingResource != irradianceResource) {
-        cl->CopyResource(stagingTexture->Resource(), irradiance->Resource());
-        cl->TransitionBarrier(irradiance->Resource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
+        cl->CopyResource(stagingTexture->Resource, irradiance->Resource);
+        cl->TransitionBarrier(irradiance->Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
     }
 
-    dxContext.Retire(stagingTexture->Resource());
+    dxContext.Retire(stagingTexture->Resource);
 
     return irradiance;
 }
 
 Ptr<DxTexture> TexturePreprocessor::PrefilterEnvironment(DxCommandList *cl, const Ptr<DxTexture> &environment, uint32 resolution) {
-    assert(environment->Resource());
+    assert(environment->Resource);
 
     DxContext& dxContext = DxContext::Instance();
     TextureFactory* textureFactory = TextureFactory::Instance();
-    CD3DX12_RESOURCE_DESC prefilteredCreationDesc(environment->Resource()->GetDesc());
+    CD3DX12_RESOURCE_DESC prefilteredCreationDesc(environment->Resource->GetDesc());
     prefilteredCreationDesc.Width = prefilteredCreationDesc.Height = resolution;
     prefilteredCreationDesc.DepthOrArraySize = 6;
     prefilteredCreationDesc.MipLevels = 0;
@@ -438,15 +438,15 @@ Ptr<DxTexture> TexturePreprocessor::PrefilterEnvironment(DxCommandList *cl, cons
 
     Ptr<DxTexture> prefiltered = textureFactory->CreateTexture(prefilteredCreationDesc, nullptr, 0);
 
-    auto prefilteredDesc = CD3DX12_RESOURCE_DESC(prefiltered->Resource()->GetDesc());
+    auto prefilteredDesc = CD3DX12_RESOURCE_DESC(prefiltered->Resource->GetDesc());
 
-    DxResource prefilteredResource = prefiltered->Resource();
+    DxResource prefilteredResource = prefiltered->Resource;
     SET_NAME(prefilteredResource, "Prefiltered");
 
     DxResource stagingResource = prefilteredResource;
 
     Ptr<DxTexture> stagingTexture = MakePtr<DxTexture>();
-    stagingTexture->SetResource(prefiltered->Resource());
+    stagingTexture->Resource = prefiltered->Resource;
 
     if ((prefilteredDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0) {
         CD3DX12_RESOURCE_DESC stagingDesc = prefilteredDesc;
@@ -463,9 +463,9 @@ Ptr<DxTexture> TexturePreprocessor::PrefilterEnvironment(DxCommandList *cl, cons
             IID_PPV_ARGS(&stagingResource)
         ));
 
-        stagingTexture->SetResource(stagingResource);
+        stagingTexture->Resource = stagingResource;
 
-        SET_NAME(stagingTexture->Resource(), "Staging");
+        SET_NAME(stagingTexture->Resource, "Staging");
     }
 
     cl->SetPipelineState(*_prefilteredEnvironmentPipeline.Pipeline);
@@ -506,8 +506,8 @@ Ptr<DxTexture> TexturePreprocessor::PrefilterEnvironment(DxCommandList *cl, cons
 
     cl->UavBarrier(stagingResource);
     if (stagingResource != prefilteredResource) {
-        cl->CopyResource(stagingTexture->Resource(), prefiltered->Resource());
-        cl->TransitionBarrier(prefiltered->Resource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
+        cl->CopyResource(stagingTexture->Resource, prefiltered->Resource);
+        cl->TransitionBarrier(prefiltered->Resource, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON);
     }
 
     return prefiltered;
@@ -524,13 +524,13 @@ Ptr<DxTexture> TexturePreprocessor::IntegrateBRDF(DxCommandList *cl, uint32 reso
     desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
     Ptr<DxTexture> brdf = textureFactory->CreateTexture(desc, nullptr, 0);
-    desc = CD3DX12_RESOURCE_DESC(brdf->Resource()->GetDesc());
+    desc = CD3DX12_RESOURCE_DESC(brdf->Resource->GetDesc());
 
     // TODO: Technically R16G16 is not guaranteed to be UAV compatible.
     // If we ever run on hardware, which does not support this, we need to find a solution.
     // https://docs.microsoft.com/en-us/windows/win32/direct3d11/typed-unordered-access-view-loads
 
-    DxResource brdfResource = brdf->Resource();
+    DxResource brdfResource = brdf->Resource;
     SET_NAME(brdfResource, "BRDF");
 
     cl->SetPipelineState(*_integrateBRDFPipeline.Pipeline);

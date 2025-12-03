@@ -11,6 +11,8 @@
 #include "directx/DxCommandList.h"
 #include "render/ShadowMapCache.h"
 #include <iostream>
+
+#include "../vcpkg_installed/x64-windows/include/DirectXColors.h"
 #include "render/pbr.hpp"
 
 
@@ -103,16 +105,16 @@ struct RaytraceComponent {
 };
 
 void Application::LoadCustomShaders() {
-	ShadowMapLightInfo info;
-	info.Viewport.CpuVP[0] = 2048;
-	info.Viewport.CpuVP[1] = 2048;
-	info.Viewport.CpuVP[2] = 4096;
-	info.Viewport.CpuVP[3] = 4096;
-
-	info.LightMovedOrAppeared = false;
-	info.GeometryInRangeMoved = false;
-
-	ShadowMapLightInfo::TestShadowMapCache(&info, 1);
+	// ShadowMapLightInfo info;
+	// info.Viewport.CpuVP[0] = 2048;
+	// info.Viewport.CpuVP[1] = 2048;
+	// info.Viewport.CpuVP[2] = 4096;
+	// info.Viewport.CpuVP[3] = 4096;
+	//
+	// info.LightMovedOrAppeared = false;
+	// info.GeometryInRangeMoved = false;
+	//
+	// ShadowMapLightInfo::TestShadowMapCache(&info, 1);
 
 	if (DxContext::Instance().MeshShaderSupported()) {
 		InitializeMeshShader();
@@ -149,22 +151,26 @@ bool Application::HandleWindowsMessages() {
 uint64 Application::RenderToWindow(float* clearColor) {
 	DxResource backBuffer = _mainWindow.GetCurrentBackBuffer();
 	DxRtvDescriptorHandle rtv = _mainWindow.Rtv();
-	DxResource frameResult = DxRenderer::Instance()->FrameResult->Resource();
 	
 	DxCommandList* cl = DxContext::Instance().GetFreeRenderCommandList();
 
+	CD3DX12_RECT scissorsRect = CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX);
 	CD3DX12_VIEWPORT viewport = CD3DX12_VIEWPORT(0.f, 0.f, (float)_mainWindow.ClientWidth, (float)_mainWindow.ClientHeight);
+
+	cl->SetScissor(scissorsRect);
 	cl->SetViewport(viewport);
 
-	cl->TransitionBarrier(backBuffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	DxBarrierBatcher(cl).Transition(backBuffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	cl->ClearRTV(rtv, 0.f, 0.f, 0.f);
-	cl->SetRenderTarget(&rtv, 1, 0);
-	DxBarrierBatcher(cl).Transition(backBuffer, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RESOLVE_DEST)
-				      .Transition(frameResult, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-	cl->ResolveSubresource(backBuffer, 0, frameResult, 0, _mainWindow.GetBackBufferFormat());
-	DxBarrierBatcher(cl).Transition(frameResult, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
-				      .Transition(backBuffer, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_PRESENT);
+	cl->SetRenderTarget(&rtv, 1, nullptr);
+	cl->SetPipelineState(*_presentPipeline.Pipeline);
+	cl->SetGraphicsRootSignature(*_presentPipeline.RootSignature);
+
+	cl->SetDescriptorHeapUAV(PresentRsTextures, 0, _nullTextureUAV);
+	cl->SetDescriptorHeapSRV(PresentRsTextures, 1, _renderer->FrameResult);
+	cl->DrawFullscreenTriangle();
+
+	DxBarrierBatcher(cl).Transition(backBuffer, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COMMON);
 
 	uint64 result = DxContext::Instance().ExecuteCommandList(cl);
 
@@ -193,6 +199,14 @@ bool Application::Initialize() {
 	LoadCustomShaders();
 	InitializeTransformationGizmos();
 
+	DxPipelineFactory* pipelineFactory = DxPipelineFactory::Instance();
+	{
+		auto desc = CREATE_GRAPHICS_PIPELINE
+		.RenderTargets(_mainWindow.GetBackBufferFormat())
+		.DepthSettings(false, false);
+		_presentPipeline = pipelineFactory->CreateReloadablePipeline(desc, {"fullscreen_triangle_vs", "present_ps"}, ERsInPixelShader);
+	}
+	_nullTextureUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateNullTextureUAV();
 	_renderer = DxRenderer::Instance();
 	_renderer->Initialize(screenFormat, initialWidth, initialHeight, true);
 
@@ -298,7 +312,7 @@ bool Application::Initialize() {
 			);
 		}
 
-		SET_NAME(_decalTexture->Resource(), "Decal");
+		SET_NAME(_decalTexture->Resource, "Decal");
 	}
 
 	_sun.Direction = normalize(vec3(-0.6f, -1.f, -0.3f));
@@ -579,11 +593,8 @@ void Application::Run() {
 		dxContext.RenderQueue.WaitForFence(fenceValues[_mainWindow.CurrentBackBufferIndex()]);
 		dxContext.NewFrame(frameId);
 
-		const CD3DX12_CPU_DESCRIPTOR_HANDLE rtv = _mainWindow.Rtv();
-		const DxResource backBuffer = _mainWindow.GetCurrentBackBuffer();
-
 		_renderer->BeginFrameCommon();
-		_renderer->BeginFrame(rtv, backBuffer);
+		_renderer->BeginFrame(_mainWindow.ClientWidth, _mainWindow.ClientHeight);
 		Update(_input, _timer.DeltaTime());
 
 		_renderer->EndFrameCommon();

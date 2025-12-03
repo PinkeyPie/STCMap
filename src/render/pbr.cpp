@@ -149,9 +149,9 @@ Ptr<PbrEnvironment> CreateEnvironment(const char *filename, uint32 skyResolution
 			environment->Environment = texturePreprocessor->PrefilterEnvironment(cl, environment->Sky, environmentResolution);
 			environment->Irradiance = texturePreprocessor->CubemapToIrradiance(cl, environment->Sky, irradianceResolution);
 
-			SET_NAME(environment->Sky->Resource(), "Sky");
-			SET_NAME(environment->Environment->Resource(), "Environment");
-			SET_NAME(environment->Irradiance->Resource(), "Irradiance");
+			SET_NAME(environment->Sky->Resource, "Sky");
+			SET_NAME(environment->Environment->Resource, "Environment");
+			SET_NAME(environment->Irradiance->Resource, "Irradiance");
 
 			dxContext.ExecuteCommandList(cl);
 
@@ -206,7 +206,7 @@ void PbrMaterial::SetupCommon(DxCommandList* cl, const CommonMaterialInfo& info)
 	DxCpuDescriptorHandle nullTexture = DxRenderer::Instance()->NullTextureSRV;
 	DxCpuDescriptorHandle nullBuffer = DxRenderer::Instance()->NullBufferSRV;
 
-	cl->SetGraphics32BitConstants(DefaultPbrRsLighting, LightingCb{ vec2(1.f / info.ShadowMap->Width(), 1.f / info.ShadowMap->Height()), info.EnvironmentIntensity });
+	cl->SetGraphics32BitConstants(DefaultPbrRsLighting, LightingCb{ vec2(1.f / info.ShadowMap->Width, 1.f / info.ShadowMap->Height), info.EnvironmentIntensity });
 
 	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 0, info.Irradiance);
 	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 1, info.Environment);
@@ -216,10 +216,10 @@ void PbrMaterial::SetupCommon(DxCommandList* cl, const CommonMaterialInfo& info)
 	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 5, info.PointLightBuffer ? info.PointLightBuffer->DefaultSRV : nullBuffer);
 	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 6, info.SpotlightBuffer ? info.SpotlightBuffer->DefaultSRV : nullBuffer);
 	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 7, info.DecalBuffer ? info.DecalBuffer->DefaultSRV : nullBuffer);
-	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 8, info.ShadowMap ? info.ShadowMap->DefaultSRV() : nullTexture);
+	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 8, info.ShadowMap ? info.ShadowMap->DefaultSRV : nullTexture);
 	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 9, info.PointLightShadowInfoBuffer ? info.PointLightShadowInfoBuffer->DefaultSRV : nullBuffer);
 	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 10, info.SpotlightShadowInfoBuffer ? info.SpotlightShadowInfoBuffer->DefaultSRV : nullBuffer);
-	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 11, info.DecalTextureAtlas ? info.DecalTextureAtlas->DefaultSRV() : nullTexture);
+	cl->SetDescriptorHeapSRV(DefaultPbrRsFrameConstants, 11, info.DecalTextureAtlas ? info.DecalTextureAtlas->DefaultSRV : nullTexture);
 
 	cl->SetGraphicsDynamicConstantBuffer(DefaultPbrRsSub, info.SunCBV);
 

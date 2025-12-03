@@ -20,7 +20,7 @@ struct SceneEntity {
 
     template<class ComponentT>
     bool HasComponent() {
-        return _registry->has<ComponentT>(_handle);
+        return _registry ? _registry->has<ComponentT>(_handle) : false;
     }
 
     template<class ComponentT, class... Args>

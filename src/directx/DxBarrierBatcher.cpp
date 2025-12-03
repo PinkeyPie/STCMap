@@ -22,7 +22,7 @@ DxBarrierBatcher &DxBarrierBatcher::Transition(const Ptr<DxTexture> &res, D3D12_
 		return *this;
 	}
 
-	return Transition(res->Resource(), from, to, subresource);
+	return Transition(res->Resource, from, to, subresource);
 }
 
 DxBarrierBatcher &DxBarrierBatcher::Transition(const Ptr<DxBuffer> &res, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
@@ -50,7 +50,7 @@ DxBarrierBatcher &DxBarrierBatcher::TransitionBegin(const Ptr<DxTexture> &res, D
 		return *this;
 	}
 
-	return TransitionBegin(res->Resource(), from, to);
+	return TransitionBegin(res->Resource, from, to);
 }
 
 DxBarrierBatcher &DxBarrierBatcher::TransitionBegin(const Ptr<DxBuffer> &res, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
@@ -77,7 +77,7 @@ DxBarrierBatcher& DxBarrierBatcher::TransitionEnd(const Ptr<DxTexture>& res, D3D
 		return *this;
 	}
 
-	return TransitionEnd(res->Resource(), from, to, subresource);
+	return TransitionEnd(res->Resource, from, to, subresource);
 }
 
 DxBarrierBatcher& DxBarrierBatcher::TransitionEnd(const Ptr<DxBuffer>& res, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
@@ -102,7 +102,7 @@ DxBarrierBatcher &DxBarrierBatcher::UAV(const Ptr<DxTexture> &res) {
 		return *this;
 	}
 
-	return UAV(res->Resource());
+	return UAV(res->Resource);
 }
 
 DxBarrierBatcher &DxBarrierBatcher::UAV(const Ptr<DxBuffer> &res) {

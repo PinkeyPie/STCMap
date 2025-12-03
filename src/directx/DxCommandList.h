@@ -89,10 +89,10 @@ public:
 
 	void SetDescriptorHeapResource(uint32 rootParameterIndex, uint32 offset, uint32 count, DxCpuDescriptorHandle handle);
 	void SetDescriptorHeapSRV(uint32 rootParameterIndex, uint32 offset, DxCpuDescriptorHandle handle) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, handle); }
-	void SetDescriptorHeapSRV(uint32 rootParameterIndex, uint32 offset, const Ptr<DxTexture> &texture) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, texture->DefaultSRV()); }
+	void SetDescriptorHeapSRV(uint32 rootParameterIndex, uint32 offset, const Ptr<DxTexture> &texture) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, texture->DefaultSRV); }
 	void SetDescriptorHeapSRV(uint32 rootParameterIndex, uint32 offset, const Ptr<DxBuffer> &buffer) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, buffer->DefaultSRV); }
 	void SetDescriptorHeapUAV(uint32 rootParameterIndex, uint32 offset, DxCpuDescriptorHandle handle) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, handle); }
-	void SetDescriptorHeapUAV(uint32 rootParameterIndex, uint32 offset, const Ptr<DxTexture> &texture) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, texture->DefaultUAV()); }
+	void SetDescriptorHeapUAV(uint32 rootParameterIndex, uint32 offset, const Ptr<DxTexture> &texture) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, texture->DefaultUAV); }
 	void SetDescriptorHeapUAV(uint32 rootParameterIndex, uint32 offset, const Ptr<DxBuffer> &buffer) { SetDescriptorHeapResource(rootParameterIndex, offset, 1, buffer->DefaultUAV); }
 
 	// Shader resources.

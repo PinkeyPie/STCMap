@@ -148,10 +148,10 @@ void PathTracer::Finish() {
 void PathTracer::Render(DxCommandList *cl, const RaytracingTlas &tlas, const Ptr<DxTexture> &output, const CommonMaterialInfo &materialInfo) {
     InputResources in;
     in.Tlas = tlas.Tlas->RaytracingSRV;
-    in.Sky = materialInfo.Sky->DefaultSRV();
+    in.Sky = materialInfo.Sky->DefaultSRV;
 
     OutputResources out;
-    out.Output = output->DefaultUAV();
+    out.Output = output->DefaultUAV;
 
 
     DxGpuDescriptorHandle gpuHandle = CopyGlobalResourcesToDescriptorHeap(in, out);
@@ -160,7 +160,7 @@ void PathTracer::Render(DxCommandList *cl, const RaytracingTlas &tlas, const Ptr
     // Fill out description.
     D3D12_DISPATCH_RAYS_DESC raytraceDesc;
     FillOutRayTracingRenderDesc(_bindingTable.GetBuffer(), raytraceDesc,
-                                output->Width(), output->Height(), 1,
+                                output->Width, output->Height, 1,
                                 _numRayTypes, _bindingTable.GetNumberOfHitGroups());
 
 

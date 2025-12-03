@@ -17,7 +17,7 @@ void DxCommandList::Barriers(CD3DX12_RESOURCE_BARRIER* barriers, uint32 numBarri
 }
 
 void DxCommandList::TransitionBarrier(const Ptr<DxTexture> &texture, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to, uint32 subresource) {
-	TransitionBarrier(texture->Resource(), from, to, subresource);
+	TransitionBarrier(texture->Resource, from, to, subresource);
 }
 
 void DxCommandList::TransitionBarrier(const Ptr<DxBuffer> &buffer, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to, uint32 subresource) {
@@ -30,7 +30,7 @@ void DxCommandList::TransitionBarrier(DxResource resource, D3D12_RESOURCE_STATES
 }
 
 void DxCommandList::UavBarrier(const Ptr<DxTexture> &texture) {
-	UavBarrier(texture->Resource());
+	UavBarrier(texture->Resource);
 }
 
 void DxCommandList::UavBarrier(const Ptr<DxBuffer> &buffer) {
@@ -43,7 +43,7 @@ void DxCommandList::UavBarrier(DxResource resource) {
 }
 
 void DxCommandList::AliasingBarrier(const Ptr<DxTexture> &before, const Ptr<DxTexture> &after) {
-	AliasingBarrier(before->Resource(), after->Resource());
+	AliasingBarrier(before->Resource.Get(), after->Resource.Get());
 }
 
 void DxCommandList::AliasingBarrier(const Ptr<DxBuffer> &before, const Ptr<DxBuffer> &after) {
@@ -56,7 +56,7 @@ void DxCommandList::AliasingBarrier(DxResource before, DxResource after) {
 }
 
 void DxCommandList::AssertResourceState(const Ptr<DxTexture> &texture, D3D12_RESOURCE_STATES state, uint32 subresource) {
-	AssertResourceState(texture->Resource(), state, subresource);
+	AssertResourceState(texture->Resource.Get(), state, subresource);
 }
 
 void DxCommandList::AssertResourceState(const Ptr<DxBuffer> &buffer, D3D12_RESOURCE_STATES state, uint32 subresource) {
@@ -78,14 +78,14 @@ void DxCommandList::CopyResource(DxResource from, DxResource to) {
 
 void DxCommandList::CopyTextureRegionToBuffer(const Ptr<DxTexture> &from, const Ptr<DxBuffer> &to, uint32 bufferElementOffset, uint32 x, uint32 y, uint32 width, uint32 height) {
 	assert(to->ElementCount >= width * height);
-	assert(to->ElementSize == DxTexture::GetFormatSize(from->Format()));
+	assert(to->ElementSize == DxTexture::GetFormatSize(from->Format));
 
 	uint32 totalSize = to->ElementCount * to->ElementSize;
 
 	D3D12_TEXTURE_COPY_LOCATION descLocation = { to->Resource.Get(), D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
-		D3D12_PLACED_SUBRESOURCE_FOOTPRINT{0, D3D12_SUBRESOURCE_FOOTPRINT{from->Format(), to->ElementCount, 1, 1, AlignTo(totalSize, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)}}};
+		D3D12_PLACED_SUBRESOURCE_FOOTPRINT{0, D3D12_SUBRESOURCE_FOOTPRINT{from->Format, to->ElementCount, 1, 1, AlignTo(totalSize, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT)}}};
 
-	D3D12_TEXTURE_COPY_LOCATION srcLocation = {from->Resource(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, 0 };
+	D3D12_TEXTURE_COPY_LOCATION srcLocation = {from->Resource.Get(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, 0 };
 
 	D3D12_BOX srcBox = { x, y, 0, x + width, y + height, 1 };
 	_commandList->CopyTextureRegion(&descLocation, bufferElementOffset, 0, 0, &srcLocation, &srcBox);
@@ -93,7 +93,7 @@ void DxCommandList::CopyTextureRegionToBuffer(const Ptr<DxTexture> &from, const 
 
 void DxCommandList::CopyTextureRegionToBuffer(const Ptr<DxTexture> &from, const Ptr<DxBuffer> &to, uint32 sourceX, uint32 sourceY, uint32 destX, uint32 destY, uint32 width, uint32 height) {
 	D3D12_TEXTURE_COPY_LOCATION destLocation = { to->Resource.Get(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, 0 };
-	D3D12_TEXTURE_COPY_LOCATION srcLocation = { from->Resource(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, 0 };
+	D3D12_TEXTURE_COPY_LOCATION srcLocation = { from->Resource.Get(), D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX, 0 };
 
 	D3D12_BOX srcBox = { sourceX, sourceY, 0, sourceX + width, sourceY + height, 1 };
 	_commandList->CopyTextureRegion(&destLocation, destX, destY, 0, &srcLocation, &srcBox);
@@ -319,11 +319,11 @@ void DxCommandList::ClearRTV(DxRtvDescriptorHandle rtv, const float* clearColor)
 }
 
 void DxCommandList::ClearRTV(const Ptr<DxTexture> &texture, float r, float g, float b, float a) {
-	ClearRTV(texture->RTVHandles(), r, g, b, a);
+	ClearRTV(texture->RtvHandles, r, g, b, a);
 }
 
 void DxCommandList::ClearRTV(const Ptr<DxTexture> &texture, const float *clearColor) {
-	ClearRTV(texture->RTVHandles(), clearColor);
+	ClearRTV(texture->RtvHandles, clearColor);
 }
 
 void DxCommandList::ClearRTV(DxRenderTarget &renderTarget, uint32 attachment, const float *clearColor) {

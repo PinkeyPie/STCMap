@@ -744,7 +744,7 @@ Ptr<DxTexture> TextureFactory::LoadTextureInternal(const std::string& filename, 
 	}
 
 	Ptr<DxTexture> result = TextureFactory::Instance()->CreateTexture(textureDesc, subresourceData.get(), numImages);
-	SET_NAME(result->_resource, "Loaded from file");
+	SET_NAME(result->Resource, "Loaded from file");
 
 	if (flags & ETextureLoadFlagsGenMipsOnGpu) {
 		DxContext& context = DxContext::Instance();
@@ -759,8 +759,8 @@ Ptr<DxTexture> TextureFactory::LoadTextureInternal(const std::string& filename, 
 }
 
 DxTexture::DxTexture(DxResource resource, CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle) {
-	_resource = resource;
-	_rtvHandles = rtvHandle;
+	Resource = resource;
+	RtvHandles = rtvHandle;
 }
 
 
@@ -795,9 +795,9 @@ Ptr<DxTexture> TextureFactory::LoadVolumeTextureFromDirectory(const char *dirnam
 void DxTexture::UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, uint32 firstSubresource, uint32 numSubresource) {
 	DxContext& dxContext = DxContext::Instance();
 	DxCommandList* commandList = dxContext.GetFreeCopyCommandList();
-	commandList->TransitionBarrier(_resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
+	commandList->TransitionBarrier(Resource, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST);
 
-	uint64 requiredSize = GetRequiredIntermediateSize(_resource.Get(), firstSubresource, numSubresource);
+	uint64 requiredSize = GetRequiredIntermediateSize(Resource.Get(), firstSubresource, numSubresource);
 
 	DxResource intermediateResource;
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
@@ -811,7 +811,7 @@ void DxTexture::UploadSubresourceData(D3D12_SUBRESOURCE_DATA* subresourceData, u
 		IID_PPV_ARGS(intermediateResource.GetAddressOf())
 	));
 
-	UpdateSubresources(commandList->CommandList(), _resource.Get(), intermediateResource.Get(), 0, firstSubresource, numSubresource, subresourceData);
+	UpdateSubresources(commandList->CommandList(), Resource.Get(), intermediateResource.Get(), 0, firstSubresource, numSubresource, subresourceData);
 	dxContext.Retire(intermediateResource);
 
 	// We are omitting the transition to common here, since the resource automatically decays to common state after being accessed on a copy queue.
@@ -859,22 +859,22 @@ Ptr<DxTexture> TextureFactory::CreateTexture(D3D12_RESOURCE_DESC textureDesc, D3
 		sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)
 	));
 
-	result->_supportsRTV = (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) and FormatSupportsRTV(formatSupport);
-	result->_supportsDSV = (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) and FormatSupportsDSV(formatSupport);
-	result->_supportsUAV = (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) and FormatSupportsUAV(formatSupport);
-	result->_supportsSRV = FormatSupportsSRV(formatSupport);
+	result->SupportsRTV = (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) and FormatSupportsRTV(formatSupport);
+	result->SupportsDSV = (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) and FormatSupportsDSV(formatSupport);
+	result->SupportsUAV = (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) and FormatSupportsUAV(formatSupport);
+	result->SupportsSRV = FormatSupportsSRV(formatSupport);
 
-	if (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET and !result->_supportsRTV) {
+	if (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET and !result->SupportsRTV) {
 		std::cout << "Warning. Requested RTV, but not supported by format." << std::endl;
 		__debugbreak();
 	}
 
-	if (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL and !result->_supportsDSV) {
+	if (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL and !result->SupportsDSV) {
 		std::cout << "Warning. Requested DSV, but not supported by format." << std::endl;
 		__debugbreak();
 	}
 
-	if (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS and !result->_supportsUAV) {
+	if (textureDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS and !result->SupportsUAV) {
 		std::cout << "Warning. Requested UAV, but not supported by format." << std::endl;
 		__debugbreak();
 	}
@@ -886,19 +886,19 @@ Ptr<DxTexture> TextureFactory::CreateTexture(D3D12_RESOURCE_DESC textureDesc, D3
 		&textureDesc,
 		initialState,
 		nullptr,
-		IID_PPV_ARGS(&result->_resource)
+		IID_PPV_ARGS(&result->Resource)
 	));
 
-	result->_numMipLevels = result->_resource->GetDesc().MipLevels;
-	result->_width = (uint32)textureDesc.Width;
-	result->_height = textureDesc.Height;
-	result->_depth = textureDesc.DepthOrArraySize;
+	result->NumMipLevels = result->Resource->GetDesc().MipLevels;
+	result->Width = (uint32)textureDesc.Width;
+	result->Height = textureDesc.Height;
+	result->Depth = textureDesc.DepthOrArraySize;
 
-	result->_defaultSRV = {};
-	result->_defaultUAV = {};
-	result->_rtvHandles = {};
-	result->_dsvHandle = {};
-	result->_stencilSRV = {};
+	result->DefaultSRV = {};
+	result->DefaultUAV = {};
+	result->RtvHandles = {};
+	result->DsvHandle = {};
+	result->StencilSRV = {};
 
 	result->_initialState = initialState;
 
@@ -909,30 +909,30 @@ Ptr<DxTexture> TextureFactory::CreateTexture(D3D12_RESOURCE_DESC textureDesc, D3
 
 	// SRV
 	if (textureDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
-		result->_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateVolumeTextureSRV(result.get());
+		result->DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateVolumeTextureSRV(result.get());
 	}
 	else if (textureDesc.DepthOrArraySize == 6) {
-		result->_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapSRV(result.get());
+		result->DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapSRV(result.get());
 	}
 	else {
-		result->_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureSRV(result.get());
+		result->DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureSRV(result.get());
 	}
 
 	// RTV
-	if (result->_supportsRTV) {
-		result->_rtvHandles = dxContext.RtvAllocator().GetFreeHandle().Create2DTextureRTV(result.get());
+	if (result->SupportsRTV) {
+		result->RtvHandles = dxContext.RtvAllocator().GetFreeHandle().Create2DTextureRTV(result.get());
 	}
 
 	// UAV
-	if (result->_supportsUAV) {
+	if (result->SupportsUAV) {
 		if (textureDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
-			result->_defaultUAV = dxContext.DescriptorAllocatorGPU().GetFreeHandle().CreateVolumeTextureUAV(result.get());
+			result->DefaultUAV = dxContext.DescriptorAllocatorGPU().GetFreeHandle().CreateVolumeTextureUAV(result.get());
 		}
 		else if (textureDesc.DepthOrArraySize == 6) {
-			result->_defaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapUAV(result.get());
+			result->DefaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapUAV(result.get());
 		}
 		else {
-			result->_defaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureUAV(result.get());
+			result->DefaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureUAV(result.get());
 		}
 	}
 
@@ -981,15 +981,15 @@ Ptr<DxTexture> TextureFactory::CreateDepthTexture(uint32 width, uint32 height, D
 		&desc,
 		D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		&optimizedClearValue,
-		IID_PPV_ARGS(result->_resource.GetAddressOf())
+		IID_PPV_ARGS(result->Resource.GetAddressOf())
 	));
 
-	result->_numMipLevels = 1;
+	result->NumMipLevels = 1;
 	result->_requestedNumMipLevels = 1;
-	result->_format = format;
-	result->_width = width;
-	result->_height = height;
-	result->_depth = arrayLength;
+	result->Format = format;
+	result->Width = width;
+	result->Height = height;
+	result->Depth = arrayLength;
 
 	D3D12_FEATURE_DATA_FORMAT_SUPPORT formatSupport;
 	formatSupport.Format = format;
@@ -999,30 +999,30 @@ Ptr<DxTexture> TextureFactory::CreateDepthTexture(uint32 width, uint32 height, D
 		sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)
 	));
 
-	result->_supportsRTV = false;
-	result->_supportsDSV = FormatSupportsDSV(formatSupport);
-	result->_supportsUAV = false;
-	result->_supportsSRV = FormatSupportsSRV(formatSupport);
+	result->SupportsRTV = false;
+	result->SupportsDSV = FormatSupportsDSV(formatSupport);
+	result->SupportsUAV = false;
+	result->SupportsSRV = FormatSupportsSRV(formatSupport);
 
-	result->_defaultSRV = {};
-	result->_defaultUAV = {};
-	result->_rtvHandles = {};
-	result->_dsvHandle = {};
-	result->_stencilSRV = {};
+	result->DefaultSRV = {};
+	result->DefaultUAV = {};
+	result->RtvHandles = {};
+	result->DsvHandle = {};
+	result->StencilSRV = {};
 
 	result->_initialState = initialState;
 
-	assert(result->_supportsDSV);
+	assert(result->SupportsDSV);
 
-	result->_dsvHandle = dxContext.DsvAllocator().GetFreeHandle().Create2DTextureDSV(result.get());
+	result->DsvHandle = dxContext.DsvAllocator().GetFreeHandle().Create2DTextureDSV(result.get());
 	if (arrayLength == 1) {
-		result->_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateDepthTextureSRV(result.get());
+		result->DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateDepthTextureSRV(result.get());
 		if (DxTexture::IsStencilFormat(format)) {
-			result->_stencilSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateStencilTextureSRV(result.get());
+			result->StencilSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateStencilTextureSRV(result.get());
 		}
 	}
 	else {
-		result->_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateDepthTextureArraySRV(result.get());
+		result->DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateDepthTextureArraySRV(result.get());
 	}
 
 	return result;
@@ -1053,8 +1053,7 @@ Ptr<DxTexture> TextureFactory::CreateCubeTexture(const void *data, uint32 width,
 }
 
 Ptr<DxTexture> TextureFactory::CreateVolumeTexture(const void *data, uint32 width, uint32 height, uint32 depth, DXGI_FORMAT format, bool allowUnorderedAccess, D3D12_RESOURCE_STATES initialState) {
-	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE
-		| (allowUnorderedAccess ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE);
+	D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE | (allowUnorderedAccess ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE);
 
 	CD3DX12_RESOURCE_DESC textureDesc = CD3DX12_RESOURCE_DESC::Tex3D(format, width, height, depth, 1, flags);
 
@@ -1075,36 +1074,36 @@ Ptr<DxTexture> TextureFactory::CreateVolumeTexture(const void *data, uint32 widt
 }
 
 void DxTexture::SetName(const wchar *name) {
-	ThrowIfFailed(_resource->SetName(name));
+	ThrowIfFailed(Resource->SetName(name));
 }
 
 std::wstring DxTexture::GetName() const {
-	if (not _resource) {
+	if (not Resource) {
 		return L"";
 	}
 
 	wchar name[128];
 	uint32 size = sizeof(name);
-	_resource->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, name);
+	Resource->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, name);
 	name[min(arraysize(name) - 1, size)] = 0;
 
 	return name;
 }
 
 void DxTexture::AllocateMipUAVs() {
-	auto desc = _resource->GetDesc();
-	assert(_supportsUAV);
+	auto desc = Resource->GetDesc();
+	assert(SupportsUAV);
 	assert(desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
 
 	uint32 mipLevels = desc.MipLevels;
 	for (uint32 i = 1; i < mipLevels; i++) {
 		DxCpuDescriptorHandle handle = DxContext::Instance().DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureUAV(this, i);
-		_mipUAVs.push_back(handle);
+		MipUAVs.push_back(handle);
 	}
 }
 
 DxTexture::~DxTexture() {
-	Retire(_resource, _defaultSRV, _defaultUAV, _stencilSRV, _rtvHandles, _dsvHandle, std::move(_mipUAVs));
+	Retire(Resource, DefaultSRV, DefaultUAV, StencilSRV, RtvHandles, DsvHandle, std::move(MipUAVs));
 }
 
 void DxTexture::Resize(uint32 newWidth, uint32 newHeight, D3D12_RESOURCE_STATES initialState) {
@@ -1112,22 +1111,22 @@ void DxTexture::Resize(uint32 newWidth, uint32 newHeight, D3D12_RESOURCE_STATES 
 
 	wchar name[128];
 	uint32 size = sizeof(name);
-	_resource->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, name);
+	Resource->GetPrivateData(WKPDID_D3DDebugObjectNameW, &size, name);
 	name[min(arraysize(name) - 1, size)] = 0;
 
-	bool hasMipUAVs = _mipUAVs.size() > 0;
+	bool hasMipUAVs = MipUAVs.size() > 0;
 
-	Retire(_resource, _defaultSRV, _defaultUAV, _stencilSRV, _rtvHandles, _dsvHandle, std::move(_mipUAVs));
+	Retire(Resource, DefaultSRV, DefaultUAV, StencilSRV, RtvHandles, DsvHandle, std::move(MipUAVs));
 
-	D3D12_RESOURCE_DESC desc = _resource->GetDesc();
-	_resource.Reset();
+	D3D12_RESOURCE_DESC desc = Resource->GetDesc();
+	Resource.Reset();
 
 	D3D12_RESOURCE_STATES state = initialState == -1 ? _initialState : initialState;
 	D3D12_CLEAR_VALUE optimizedClearValue = {};
 	D3D12_CLEAR_VALUE* clearValue = nullptr;
 
 	if (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) {
-		optimizedClearValue.Format = _format;
+		optimizedClearValue.Format = Format;
 		optimizedClearValue.DepthStencil = { 1.f, 0 };
 		clearValue = &optimizedClearValue;
 	}
@@ -1137,8 +1136,8 @@ void DxTexture::Resize(uint32 newWidth, uint32 newHeight, D3D12_RESOURCE_STATES 
 
 	desc.Width = newWidth;
 	desc.Height = newHeight;
-	_width = newWidth;
-	_height = newHeight;
+	Width = newWidth;
+	Height = newHeight;
 
 	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	ThrowIfFailed(dxContext.GetDevice()->CreateCommittedResource(
@@ -1147,51 +1146,51 @@ void DxTexture::Resize(uint32 newWidth, uint32 newHeight, D3D12_RESOURCE_STATES 
 		&desc,
 		state,
 		clearValue,
-		IID_PPV_ARGS(_resource.GetAddressOf())
+		IID_PPV_ARGS(Resource.GetAddressOf())
 	));
 
-	_numMipLevels = _resource->GetDesc().MipLevels;
+	NumMipLevels = Resource->GetDesc().MipLevels;
 
-	if (_supportsRTV) {
-		_rtvHandles = dxContext.RtvAllocator().GetFreeHandle().Create2DTextureRTV(this);
+	if (SupportsRTV) {
+		RtvHandles = dxContext.RtvAllocator().GetFreeHandle().Create2DTextureRTV(this);
 	}
 
 	// DSV and SRV
-	if (_supportsDSV) {
-		_dsvHandle = dxContext.DsvAllocator().GetFreeHandle().Create2DTextureDSV(this);
-		if (_depth == 1) {
-			_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateDepthTextureSRV(this);
+	if (SupportsDSV) {
+		DsvHandle = dxContext.DsvAllocator().GetFreeHandle().Create2DTextureDSV(this);
+		if (Depth == 1) {
+			DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateDepthTextureSRV(this);
 		}
 		else {
-			_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateDepthTextureArraySRV(this);
+			DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateDepthTextureArraySRV(this);
 		}
 
-		if (DxTexture::IsStencilFormat(_format)) {
-			_stencilSRV = dxContext.DescriptorAllocatorGPU().GetFreeHandle().CreateStencilTextureSRV(this);
+		if (DxTexture::IsStencilFormat(Format)) {
+			StencilSRV = dxContext.DescriptorAllocatorGPU().GetFreeHandle().CreateStencilTextureSRV(this);
 		}
 	}
 	else {
 		if (desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
-			_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateVolumeTextureSRV(this);
+			DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateVolumeTextureSRV(this);
 		}
-		else if (_depth == 6) {
-			_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapSRV(this);
+		else if (Depth == 6) {
+			DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapSRV(this);
 		}
 		else {
-			_defaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureSRV(this);
+			DefaultSRV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureSRV(this);
 		}
 	}
 
 	// UAV
-	if (_supportsUAV) {
+	if (SupportsUAV) {
 		if (desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
-			_defaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateVolumeTextureUAV(this);
+			DefaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateVolumeTextureUAV(this);
 		}
-		else if (_depth == 6) {
-			_defaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapUAV(this);
+		else if (Depth == 6) {
+			DefaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().CreateCubemapUAV(this);
 		}
 		else {
-			_defaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureUAV(this);
+			DefaultUAV = dxContext.DescriptorAllocatorCPU().GetFreeHandle().Create2DTextureUAV(this);
 		}
 	}
 

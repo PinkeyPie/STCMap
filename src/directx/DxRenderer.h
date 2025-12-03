@@ -70,7 +70,6 @@ public:
 	void EndFrameCommon();
 
 	void BeginFrame(uint32 width, uint32 height);
-	void BeginFrame(CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle, DxResource renderTarget);
 	void EndFrame(const UserInput& input);
 
 	void SetCamera(const RenderCamera& camera);
@@ -123,7 +122,6 @@ public:
 	uint32 RenderWidth;
 	uint32 RenderHeight;
 	Ptr<DxTexture> FrameResult;
-	Ptr<DxTexture> RenderTarget;
 
 	uint16 HoveredObjectID = 0xffff;
 

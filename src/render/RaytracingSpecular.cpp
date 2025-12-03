@@ -148,15 +148,15 @@ void SpecularReflectionsRaytracer::Finish() {
 void SpecularReflectionsRaytracer::Render(DxCommandList *cl, const RaytracingTlas &tlas, const Ptr<DxTexture> &output, const CommonMaterialInfo &materialInfo) {
     InputResources in;
     in.Tlas = tlas.Tlas->RaytracingSRV;
-    in.DepthBuffer = materialInfo.OpaqueDepth->DefaultSRV();
-    in.ScreenSpaceNormals = materialInfo.WorldNormals->DefaultSRV();
-    in.Irradiance = materialInfo.Irradiance->DefaultSRV();
-    in.Environment = materialInfo.Environment->DefaultSRV();
-    in.Sky = materialInfo.Sky->DefaultSRV();
-    in.Brdf = materialInfo.Brdf->DefaultSRV();
+    in.DepthBuffer = materialInfo.OpaqueDepth->DefaultSRV;
+    in.ScreenSpaceNormals = materialInfo.WorldNormals->DefaultSRV;
+    in.Irradiance = materialInfo.Irradiance->DefaultSRV;
+    in.Environment = materialInfo.Environment->DefaultSRV;
+    in.Sky = materialInfo.Sky->DefaultSRV;
+    in.Brdf = materialInfo.Brdf->DefaultSRV;
 
     OutputResources out;
-    out.Output = output->DefaultUAV();
+    out.Output = output->DefaultUAV;
 
 
     DxGpuDescriptorHandle gpuHandle = CopyGlobalResourcesToDescriptorHeap(in, out);
@@ -165,7 +165,7 @@ void SpecularReflectionsRaytracer::Render(DxCommandList *cl, const RaytracingTla
     // Fill out description.
     D3D12_DISPATCH_RAYS_DESC raytraceDesc;
     FillOutRayTracingRenderDesc(_bindingTable.GetBuffer(), raytraceDesc,
-        output->Width(), output->Height(), 1,
+        output->Width, output->Height, 1,
         _numRayTypes, _bindingTable.GetNumberOfHitGroups());
 
     RaytracingCb raytracingCB = { NumBounces, FadeoutDistance, MaxDistance, materialInfo.EnvironmentIntensity, materialInfo.SkyIntensity };
